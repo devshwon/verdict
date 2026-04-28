@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   categories,
   categoryColors,
@@ -17,6 +18,15 @@ export function FeedCard({ vote }: Props) {
   const tag = feedTagStyles[vote.tag];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
+
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [voted, setVoted] = useState(false);
+
+  const showResults = vote.showResultBar || voted;
+  const pendingOption =
+    pendingId !== null
+      ? vote.options.find((o) => o.id === pendingId) ?? null
+      : null;
 
   return (
     <div
@@ -68,8 +78,21 @@ export function FeedCard({ vote }: Props) {
         “{vote.question}”
       </div>
 
-      {vote.showResultBar ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
+      {showResults ? (
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}
+        >
+          {voted ? (
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: cat.bar,
+              }}
+            >
+              참여 완료
+            </span>
+          ) : null}
           {vote.options.map((opt) => (
             <ResultBar
               key={opt.id}
@@ -81,26 +104,99 @@ export function FeedCard({ vote }: Props) {
           ))}
         </div>
       ) : (
-        <div style={{ display: "flex", gap: spacing.sm }}>
-          {vote.options.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}
+        >
+          <div style={{ display: "flex", gap: spacing.sm }}>
+            {vote.options.map((opt) => {
+              const isPending = pendingId === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() =>
+                    setPendingId((prev) => (prev === opt.id ? null : opt.id))
+                  }
+                  aria-pressed={isPending}
+                  style={{
+                    flex: 1,
+                    padding: `${spacing.sm + 2}px 0`,
+                    borderRadius: radius.md,
+                    border: `1px solid ${
+                      isPending ? cat.bar : palette.border
+                    }`,
+                    background: isPending ? cat.surface : palette.surface,
+                    color: isPending ? cat.text : palette.textPrimary,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {pendingOption ? (
+            <div
               style={{
-                flex: 1,
-                padding: `${spacing.sm + 2}px 0`,
+                padding: `${spacing.sm}px ${spacing.md}px`,
                 borderRadius: radius.md,
-                border: `1px solid ${palette.border}`,
-                background: palette.surface,
-                color: palette.textPrimary,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
+                background: cat.surface,
+                display: "flex",
+                alignItems: "center",
+                gap: spacing.sm,
               }}
             >
-              {opt.label}
-            </button>
-          ))}
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: cat.text,
+                  lineHeight: 1.4,
+                }}
+              >
+                ‘{pendingOption.label}’(으)로 투표할까요?
+              </span>
+              <button
+                type="button"
+                onClick={() => setPendingId(null)}
+                style={{
+                  padding: `${spacing.xs}px ${spacing.md}px`,
+                  borderRadius: radius.sm,
+                  border: `1px solid ${palette.border}`,
+                  background: palette.background,
+                  color: palette.textSecondary,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoted(true);
+                  setPendingId(null);
+                }}
+                style={{
+                  padding: `${spacing.xs}px ${spacing.md}px`,
+                  borderRadius: radius.sm,
+                  border: "none",
+                  background: cat.bar,
+                  color: palette.background,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                확정
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -121,7 +217,7 @@ function Pill({
       style={{
         fontSize: 11,
         fontWeight: 600,
-        padding: `${spacing.xs / 2}px ${spacing.sm}px`,
+        padding: `${spacing.xs}px ${spacing.sm}px`,
         borderRadius: radius.sm,
         background: bg,
         color: fg,

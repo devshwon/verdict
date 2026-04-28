@@ -36,7 +36,7 @@ export function TodayVoteCard({ vote }: Props) {
           style={{
             fontSize: 11,
             fontWeight: 600,
-            padding: `${spacing.xs / 2}px ${spacing.sm}px`,
+            padding: `${spacing.xs}px ${spacing.sm}px`,
             borderRadius: radius.sm,
             background: todayTagStyle.surface,
             color: todayTagStyle.text,
@@ -72,7 +72,7 @@ export function TodayVoteCard({ vote }: Props) {
         </span>
       </div>
 
-      <Button variant="fill" size="medium">
+      <Button variant="fill" size="medium" disabled>
         투표하기
       </Button>
     </div>
