@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
+import { AuthGate } from "./features/auth/AuthGate";
 import { HomeFeed } from "./features/home/HomeFeed";
 import { MyPage } from "./features/mypage/MyPage";
 import { RegisterScreen } from "./features/register/RegisterScreen";
@@ -8,7 +9,7 @@ import "./App.css";
 
 function App() {
   return (
-    <>
+    <AuthGate>
       <Routes>
         <Route path="/" element={<HomeFeed />} />
         <Route path="/vote/:id" element={<VoteDetail />} />
@@ -16,7 +17,7 @@ function App() {
         <Route path="/mypage" element={<MyPage />} />
       </Routes>
       <BottomNav />
-    </>
+    </AuthGate>
   );
 }
 
