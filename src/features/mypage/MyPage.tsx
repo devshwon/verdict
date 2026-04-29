@@ -1,5 +1,5 @@
 import { Top } from "@toss/tds-mobile";
-import { palette, spacing } from "../../design/tokens";
+import { layout, palette } from "../../design/tokens";
 import { MyVotesSection } from "./components/MyVotesSection";
 import { ParticipatedSection } from "./components/ParticipatedSection";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -12,7 +12,7 @@ export function MyPage() {
       style={{
         background: palette.surface,
         minHeight: "100vh",
-        paddingBottom: spacing.xxl,
+        paddingBottom: layout.bottomNavReserve,
       }}
     >
       <Top

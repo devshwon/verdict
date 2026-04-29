@@ -1,6 +1,9 @@
 import {
+  borderWidth,
   categories,
   categoryColors,
+  fontSize,
+  fontWeight,
   palette,
   radius,
   spacing,
@@ -15,12 +18,14 @@ type Props = {
 export function CategoryTabs({ active, onChange }: Props) {
   return (
     <div
+      className="hide-scrollbar"
       style={{
         display: "flex",
         gap: spacing.xs,
         overflowX: "auto",
         padding: `${spacing.sm}px ${spacing.lg}px`,
         background: palette.background,
+        WebkitOverflowScrolling: "touch",
       }}
     >
       {categories.map((c) => {
@@ -37,13 +42,13 @@ export function CategoryTabs({ active, onChange }: Props) {
             onClick={() => onChange(c.key)}
             style={{
               flexShrink: 0,
-              padding: `${spacing.xs + 2}px ${spacing.md}px`,
+              padding: `${spacing.sm}px ${spacing.md}px`,
               borderRadius: radius.pill,
-              border: `1px solid ${isActive ? color.bar : palette.border}`,
+              border: `${borderWidth.hairline}px solid ${isActive ? color.bar : palette.border}`,
               background: isActive ? color.surface : palette.background,
               color: isActive ? color.text : palette.textSecondary,
-              fontSize: 13,
-              fontWeight: isActive ? 600 : 500,
+              fontSize: fontSize.label,
+              fontWeight: isActive ? fontWeight.medium : fontWeight.regular,
               cursor: "pointer",
               whiteSpace: "nowrap",
             }}

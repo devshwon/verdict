@@ -1,6 +1,6 @@
 import { Button, Toast } from "@toss/tds-mobile";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getShareUrl } from "../../config/share";
 import {
   borderWidth,
@@ -9,6 +9,7 @@ import {
   controlHeight,
   fontSize,
   fontWeight,
+  layout,
   lineHeight,
   motion,
   palette,
@@ -23,10 +24,12 @@ import { VoteOptions } from "./components/VoteOptions";
 import { getVoteDetail } from "./mocks";
 
 type Phase = "unvoted" | "submitting" | "result";
+type ShareChannel = "kakao" | "instagram" | "url";
 
 export function VoteDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const detail = useMemo(() => getVoteDetail(id), [id]);
 
   const [phase, setPhase] = useState<Phase>(() =>
@@ -34,7 +37,9 @@ export function VoteDetail() {
   );
   const [myOptionId, setMyOptionId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const sharingRef = useRef(false);
+  const [pendingChannel, setPendingChannel] = useState<ShareChannel | null>(
+    null,
+  );
 
   useEffect(() => {
     setPhase(detail?.isClosed ? "result" : "unvoted");
@@ -56,18 +61,19 @@ export function VoteDetail() {
     categories.find((c) => c.key === detail.category)?.label ?? "";
 
   const handlePick = (optionId: string) => {
+    if (myOptionId !== null || phase !== "unvoted") return;
     setMyOptionId(optionId);
     setPhase("submitting");
   };
 
   const handleBack = () => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/", { replace: true });
+    if (location.key === "default") navigate("/", { replace: true });
+    else navigate(-1);
   };
 
-  const handleShare = async (channel: "kakao" | "instagram" | "url") => {
-    if (sharingRef.current) return;
-    sharingRef.current = true;
+  const handleShare = async (channel: ShareChannel) => {
+    if (pendingChannel === channel) return;
+    setPendingChannel(channel);
     try {
       if (channel === "url") {
         try {
@@ -82,7 +88,7 @@ export function VoteDetail() {
       setToast(`${label} 공유는 곧 지원될 예정이에요`);
     } finally {
       setTimeout(() => {
-        sharingRef.current = false;
+        setPendingChannel((prev) => (prev === channel ? null : prev));
       }, motion.toastMs);
     }
   };
@@ -141,7 +147,11 @@ export function VoteDetail() {
 
       {phase === "unvoted" ? (
         <section style={{ margin: `0 ${spacing.lg}px` }}>
-          <VoteOptions options={detail.options} onPick={handlePick} />
+          <VoteOptions
+            options={detail.options}
+            disabled={myOptionId !== null}
+            onPick={handlePick}
+          />
         </section>
       ) : null}
 
@@ -170,17 +180,19 @@ export function VoteDetail() {
             accentBar={accent.bar}
           />
           <AdSlot />
-          <ShareRow onShare={handleShare} />
+          <ShareRow pendingChannel={pendingChannel} onShare={handleShare} />
         </>
       ) : null}
 
-      <Toast
-        position="bottom"
-        open={toast !== null}
-        text={toast ?? ""}
-        duration={motion.toastMs}
-        onClose={() => setToast(null)}
-      />
+      {toast !== null ? (
+        <Toast
+          position="bottom"
+          open
+          text={toast}
+          duration={motion.toastMs}
+          onClose={() => setToast(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -273,7 +285,7 @@ function OverallResult({
             ratio={opt.ratio}
             barColor={myOptionId === opt.id ? accentBar : palette.textTertiary}
             highlighted={myOptionId === opt.id}
-            labelWidth={64}
+            labelWidth={layout.resultLabelMd}
           />
         ))}
       </div>
