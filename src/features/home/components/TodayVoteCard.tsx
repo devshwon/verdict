@@ -1,4 +1,5 @@
 import { Button } from "@toss/tds-mobile";
+import { useNavigate } from "react-router-dom";
 import {
   categories,
   categoryColors,
@@ -14,12 +15,23 @@ type Props = {
 };
 
 export function TodayVoteCard({ vote }: Props) {
+  const navigate = useNavigate();
+  const goDetail = () => navigate(`/vote/${vote.id}`);
   const color = categoryColors[vote.category];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={goDetail}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          goDetail();
+        }
+      }}
       style={{
         margin: `${spacing.sm}px ${spacing.lg}px`,
         padding: spacing.lg,
@@ -29,6 +41,7 @@ export function TodayVoteCard({ vote }: Props) {
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: "pointer",
       }}
     >
       <div style={{ display: "flex", gap: spacing.xs }}>
@@ -72,7 +85,14 @@ export function TodayVoteCard({ vote }: Props) {
         </span>
       </div>
 
-      <Button variant="fill" size="medium" disabled>
+      <Button
+        variant="fill"
+        size="medium"
+        onClick={(e) => {
+          e.stopPropagation();
+          goDetail();
+        }}
+      >
         투표하기
       </Button>
     </div>

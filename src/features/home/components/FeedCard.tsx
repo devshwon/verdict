@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   categories,
   categoryColors,
@@ -14,6 +15,9 @@ type Props = {
 };
 
 export function FeedCard({ vote }: Props) {
+  const navigate = useNavigate();
+  const goDetail = () => navigate(`/vote/${vote.id}`);
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
   const cat = categoryColors[vote.category];
   const tag = feedTagStyles[vote.tag];
   const categoryLabel =
@@ -30,6 +34,15 @@ export function FeedCard({ vote }: Props) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={goDetail}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          goDetail();
+        }
+      }}
       style={{
         margin: `${spacing.sm}px ${spacing.lg}px`,
         padding: spacing.lg,
@@ -39,6 +52,7 @@ export function FeedCard({ vote }: Props) {
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: "pointer",
       }}
     >
       <div
@@ -114,9 +128,10 @@ export function FeedCard({ vote }: Props) {
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() =>
-                    setPendingId((prev) => (prev === opt.id ? null : opt.id))
-                  }
+                  onClick={(e) => {
+                    stop(e);
+                    setPendingId((prev) => (prev === opt.id ? null : opt.id));
+                  }}
                   aria-pressed={isPending}
                   style={{
                     flex: 1,
@@ -162,7 +177,10 @@ export function FeedCard({ vote }: Props) {
               </span>
               <button
                 type="button"
-                onClick={() => setPendingId(null)}
+                onClick={(e) => {
+                  stop(e);
+                  setPendingId(null);
+                }}
                 style={{
                   padding: `${spacing.xs}px ${spacing.md}px`,
                   borderRadius: radius.sm,
@@ -178,7 +196,8 @@ export function FeedCard({ vote }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  stop(e);
                   setVoted(true);
                   setPendingId(null);
                 }}

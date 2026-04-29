@@ -5,6 +5,7 @@ export const spacing = {
   lg: 16,
   xl: 20,
   xxl: 24,
+  xxxl: 32,
 } as const;
 
 export const radius = {
@@ -16,10 +17,62 @@ export const radius = {
 
 export const fontSize = {
   caption: 11,
+  small: 12,
+  label: 13,
   body: 14,
   subtitle: 15,
+  button: 16,
   title: 17,
+  iconLarge: 18,
   heading: 20,
+  hero: 22,
+} as const;
+
+export const fontWeight = {
+  regular: 500,
+  medium: 600,
+  bold: 700,
+} as const;
+
+export const touchTarget = {
+  sm: 32,
+  md: 44,
+} as const;
+
+export const lineHeight = {
+  tight: 1.4,
+  body: 1.45,
+} as const;
+
+export const controlHeight = {
+  bar: 8,
+  header: 52,
+  iconButton: 40,
+  spinner: 28,
+  ad: 72,
+} as const;
+
+export const borderWidth = {
+  hairline: 1,
+  thick: 1.5,
+  spinner: 3,
+} as const;
+
+export const motion = {
+  spinMs: 700,
+  resultDelayMs: 800,
+  toastMs: 1800,
+  barTransition: "width 320ms ease",
+} as const;
+
+export const shadow = {
+  sm: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  md: "0 4px 16px rgba(0, 0, 0, 0.08)",
+} as const;
+
+export const matchStyles = {
+  matched: { surface: "#EAF3DE", text: "#27500A" },
+  mismatched: { surface: "#FAECE7", text: "#712B13" },
 } as const;
 
 export const palette = {
@@ -52,6 +105,15 @@ export const TODAY_CARD_CATEGORIES: CategoryKey[] = [
   "love",
   "work",
 ];
+
+export type RegisterCategoryKey = Exclude<CategoryKey, "all">;
+
+export const registerCategories: {
+  key: RegisterCategoryKey;
+  label: string;
+}[] = categories.filter(
+  (c): c is { key: RegisterCategoryKey; label: string } => c.key !== "all"
+);
 
 export const categoryColors: Record<
   Exclude<CategoryKey, "all">,
