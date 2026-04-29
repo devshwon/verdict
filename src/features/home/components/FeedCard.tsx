@@ -9,6 +9,7 @@ import {
   feedTagStyles,
   fontSize,
   fontWeight,
+  layout,
   lineHeight,
   palette,
   radius,
@@ -240,7 +241,7 @@ function ResultBar({
         style={{
           fontSize: fontSize.small,
           color: palette.textSecondary,
-          width: 56,
+          width: layout.resultLabelSm,
           flexShrink: 0,
         }}
       >
@@ -268,7 +269,7 @@ function ResultBar({
         style={{
           fontSize: fontSize.small,
           fontWeight: fontWeight.medium,
-          width: 36,
+          width: layout.resultRatioColumn,
           textAlign: "right",
           color: barColor,
         }}

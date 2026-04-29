@@ -15,15 +15,13 @@ const NAV_ITEMS: {
   match: (p: string) => boolean;
 }[] = [
   { to: "/", label: "홈", match: (p) => p === "/" },
+  { to: "/register", label: "등록", match: (p) => p.startsWith("/register") },
   { to: "/mypage", label: "마이", match: (p) => p.startsWith("/mypage") },
 ];
 
-const VISIBLE_PATHS = new Set(NAV_ITEMS.map((it) => it.to));
-
 export function BottomNav() {
   const { pathname } = useLocation();
-  const isVisible =
-    VISIBLE_PATHS.has(pathname) || pathname.startsWith("/mypage");
+  const isVisible = NAV_ITEMS.some((it) => it.match(pathname));
   if (!isVisible) return null;
 
   return (

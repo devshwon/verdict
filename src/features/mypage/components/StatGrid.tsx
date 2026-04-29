@@ -1,6 +1,8 @@
 import {
+  borderWidth,
   fontSize,
   fontWeight,
+  layout,
   palette,
   radius,
   spacing,
@@ -19,7 +21,7 @@ export function StatGrid({ stats }: Props) {
         padding: spacing.md,
         borderRadius: radius.lg,
         background: palette.background,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         display: "flex",
       }}
     >
@@ -70,7 +72,7 @@ function Divider() {
   return (
     <div
       style={{
-        width: 1,
+        width: layout.divider,
         background: palette.divider,
         margin: `${spacing.xs}px 0`,
       }}

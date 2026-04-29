@@ -1,6 +1,7 @@
 import { Pill } from "../../../components/Pill";
 import { SectionTitle } from "../../../components/SectionTitle";
 import {
+  borderWidth,
   categories,
   categoryColors,
   fontSize,
@@ -34,7 +35,7 @@ export function ParticipatedSection({ votes }: Props) {
             padding: spacing.xl,
             borderRadius: radius.md,
             background: palette.surface,
-            border: `1px dashed ${palette.border}`,
+            border: `${borderWidth.hairline}px dashed ${palette.border}`,
             textAlign: "center",
             color: palette.textSecondary,
             fontSize: fontSize.label,
@@ -73,7 +74,7 @@ function Row({ vote }: { vote: ParticipatedVote }) {
         padding: spacing.md,
         borderRadius: radius.md,
         background: palette.background,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,

@@ -2,6 +2,7 @@ import {
   controlHeight,
   fontSize,
   fontWeight,
+  layout,
   motion,
   palette,
   radius,
@@ -21,7 +22,7 @@ export function ResultBar({
   ratio,
   barColor,
   highlighted = false,
-  labelWidth = 56,
+  labelWidth = layout.resultLabelSm,
 }: Props) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
@@ -59,7 +60,7 @@ export function ResultBar({
         style={{
           fontSize: fontSize.small,
           fontWeight: fontWeight.medium,
-          width: 36,
+          width: layout.resultRatioColumn,
           textAlign: "right",
           color: barColor,
         }}

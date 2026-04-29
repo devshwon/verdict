@@ -38,7 +38,12 @@ function buildPayload(
   };
 }
 
-export function useRegisterForm() {
+type Options = {
+  onSuccess?: (payload: RegisterPayload) => void;
+};
+
+export function useRegisterForm(options: Options = {}) {
+  const { onSuccess } = options;
   const idCounterRef = useRef(2);
   const [question, setQuestion] = useState("");
   const [choices, setChoices] = useState<Choice[]>([
@@ -130,6 +135,19 @@ export function useRegisterForm() {
     setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
   };
 
+  const resetForm = () => {
+    setQuestion("");
+    setChoices([
+      { id: "c0", value: "" },
+      { id: "c1", value: "" },
+    ]);
+    idCounterRef.current = 2;
+    setCategory(null);
+    setDuration("h1");
+    setTodayCandidate(false);
+    setTouched({});
+  };
+
   const submit = () => {
     if (submittingRef.current) return;
     setTouched({ question: true, choices: true, category: true });
@@ -148,12 +166,12 @@ export function useRegisterForm() {
 
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      // TODO: 실제 등록 API 연동 시 교체
-      // eslint-disable-next-line no-console
-      console.log("[register] dummy submit payload", payload);
       if (!mountedRef.current) return;
       setSubmitting(false);
       submittingRef.current = false;
+      // TODO: 실제 등록 API 연동 시 교체
+      onSuccess?.(payload);
+      resetForm();
     }, SUBMIT_DELAY_MS);
   };
 

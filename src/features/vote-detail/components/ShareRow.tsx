@@ -9,6 +9,7 @@ import {
 type Channel = "kakao" | "instagram" | "url";
 
 type Props = {
+  pendingChannel?: Channel | null;
   onShare: (channel: Channel) => void;
 };
 
@@ -18,7 +19,7 @@ const channels: { key: Channel; label: string; ready: boolean }[] = [
   { key: "url", label: "URL 복사", ready: true },
 ];
 
-export function ShareRow({ onShare }: Props) {
+export function ShareRow({ pendingChannel, onShare }: Props) {
   return (
     <section
       style={{
@@ -38,20 +39,23 @@ export function ShareRow({ onShare }: Props) {
         결과 공유하기
       </span>
       <div style={{ display: "flex", gap: spacing.sm }}>
-        {channels.map((c) => (
-          <div key={c.key} style={{ flex: 1 }}>
-            <Button
-              size="medium"
-              display="full"
-              variant="weak"
-              color="dark"
-              disabled={!c.ready}
-              onClick={() => onShare(c.key)}
-            >
-              {c.ready ? c.label : `${c.label} (준비중)`}
-            </Button>
-          </div>
-        ))}
+        {channels.map((c) => {
+          const isPending = pendingChannel === c.key;
+          return (
+            <div key={c.key} style={{ flex: 1 }}>
+              <Button
+                size="medium"
+                display="full"
+                variant="weak"
+                color="dark"
+                disabled={!c.ready || isPending}
+                onClick={() => onShare(c.key)}
+              >
+                {c.ready ? c.label : `${c.label} (준비중)`}
+              </Button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

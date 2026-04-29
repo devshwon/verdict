@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pill } from "../../../components/Pill";
 import { SectionTitle } from "../../../components/SectionTitle";
 import {
+  borderWidth,
   categories,
   categoryColors,
   fontSize,
@@ -80,7 +81,7 @@ function Segmented({
         padding: spacing.xs,
         background: palette.surface,
         borderRadius: radius.md,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
       }}
     >
       {items.map((it) => {
@@ -123,7 +124,7 @@ function Row({ vote }: { vote: MyVote }) {
         padding: spacing.md,
         borderRadius: radius.md,
         background: palette.background,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
@@ -179,7 +180,7 @@ function Empty({ message }: { message: string }) {
         padding: spacing.xl,
         borderRadius: radius.md,
         background: palette.surface,
-        border: `1px dashed ${palette.border}`,
+        border: `${borderWidth.hairline}px dashed ${palette.border}`,
         textAlign: "center",
         color: palette.textSecondary,
         fontSize: fontSize.label,

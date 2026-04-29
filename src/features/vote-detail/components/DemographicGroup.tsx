@@ -2,6 +2,7 @@ import {
   borderWidth,
   fontSize,
   fontWeight,
+  layout,
   palette,
   radius,
   spacing,
@@ -86,7 +87,7 @@ export function DemographicGroup({
                     ratio={ratio}
                     barColor={isMine ? accentBar : palette.textTertiary}
                     highlighted={isMine}
-                    labelWidth={64}
+                    labelWidth={layout.resultLabelMd}
                   />
                 );
               })}

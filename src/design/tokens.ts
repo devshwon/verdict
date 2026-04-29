@@ -50,6 +50,16 @@ export const controlHeight = {
   iconButton: 40,
   spinner: 28,
   ad: 72,
+  adBanner: 64,
+} as const;
+
+export const layout = {
+  bottomNavReserve: 72,
+  avatarSize: 48,
+  resultLabelSm: 56,
+  resultLabelMd: 64,
+  resultRatioColumn: 36,
+  divider: 1,
 } as const;
 
 export const borderWidth = {

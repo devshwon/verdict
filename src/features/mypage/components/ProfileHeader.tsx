@@ -1,6 +1,8 @@
 import {
+  borderWidth,
   fontSize,
   fontWeight,
+  layout,
   palette,
   radius,
   spacing,
@@ -11,8 +13,6 @@ type Props = {
   profile: Profile;
 };
 
-const AVATAR_SIZE = 48;
-
 export function ProfileHeader({ profile }: Props) {
   return (
     <div
@@ -21,7 +21,7 @@ export function ProfileHeader({ profile }: Props) {
         padding: spacing.lg,
         borderRadius: radius.lg,
         background: palette.background,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         display: "flex",
         alignItems: "center",
         gap: spacing.md,
@@ -66,8 +66,8 @@ function Avatar({ nickname }: { nickname: string }) {
   return (
     <div
       style={{
-        width: AVATAR_SIZE,
-        height: AVATAR_SIZE,
+        width: layout.avatarSize,
+        height: layout.avatarSize,
         borderRadius: radius.pill,
         background: palette.brandSurface,
         color: palette.brandText,

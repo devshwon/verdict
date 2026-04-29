@@ -1,5 +1,6 @@
-import { Top } from "@toss/tds-mobile";
-import { palette, spacing } from "../../design/tokens";
+import { Top, Toast } from "@toss/tds-mobile";
+import { useState } from "react";
+import { layout, motion, palette, spacing } from "../../design/tokens";
 import { CategoryPicker } from "./components/CategoryPicker";
 import { ChoiceList } from "./components/ChoiceList";
 import { DurationPicker } from "./components/DurationPicker";
@@ -9,7 +10,10 @@ import { TodayCandidateToggle } from "./components/TodayCandidateToggle";
 import { useRegisterForm } from "./useRegisterForm";
 
 export function RegisterScreen() {
-  const form = useRegisterForm();
+  const [toast, setToast] = useState<string | null>(null);
+  const form = useRegisterForm({
+    onSuccess: () => setToast("등록되었어요"),
+  });
 
   return (
     <div
@@ -18,12 +22,13 @@ export function RegisterScreen() {
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
+        paddingBottom: layout.bottomNavReserve,
       }}
     >
       <Top
-        title={<Top.TitleParagraph size={20}>질문 등록</Top.TitleParagraph>}
+        title={<Top.TitleParagraph size={22}>질문 등록</Top.TitleParagraph>}
         subtitleBottom={
-          <Top.SubtitleParagraph size={14}>
+          <Top.SubtitleParagraph size={15}>
             대중의 평균값이 궁금한 질문을 만들어보세요
           </Top.SubtitleParagraph>
         }
@@ -71,6 +76,16 @@ export function RegisterScreen() {
         loading={form.submitting}
         onSubmit={form.submit}
       />
+
+      {toast !== null ? (
+        <Toast
+          position="bottom"
+          open
+          text={toast}
+          duration={motion.toastMs}
+          onClose={() => setToast(null)}
+        />
+      ) : null}
     </div>
   );
 }
