@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import {
+  borderWidth,
   fontSize,
   fontWeight,
   palette,
@@ -37,7 +38,7 @@ export function BottomNav() {
         padding: spacing.xs,
         background: palette.background,
         borderRadius: radius.pill,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         boxShadow: shadow.md,
         zIndex: 10,
       }}

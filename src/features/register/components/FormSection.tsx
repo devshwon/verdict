@@ -46,7 +46,7 @@ export function FormSection({ title, subtitle, errorMessage, children }: Props) 
           style={{
             marginTop: spacing.sm,
             fontSize: fontSize.small,
-            color: "#D03A3A",
+            color: palette.error,
           }}
         >
           {errorMessage}
