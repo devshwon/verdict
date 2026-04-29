@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { Button, Toast } from "@toss/tds-mobile";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getShareUrl } from "../../config/share";
 import {
+  borderWidth,
   categories,
   categoryColors,
+  controlHeight,
+  fontSize,
+  fontWeight,
+  lineHeight,
+  motion,
   palette,
   radius,
   spacing,
@@ -16,8 +24,6 @@ import { getVoteDetail } from "./mocks";
 
 type Phase = "unvoted" | "submitting" | "result";
 
-const RESULT_DELAY_MS = 800;
-
 export function VoteDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -28,21 +34,21 @@ export function VoteDetail() {
   );
   const [myOptionId, setMyOptionId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const sharingRef = useRef(false);
+
+  useEffect(() => {
+    setPhase(detail?.isClosed ? "result" : "unvoted");
+    setMyOptionId(null);
+  }, [id, detail?.isClosed]);
 
   useEffect(() => {
     if (phase !== "submitting") return;
-    const t = setTimeout(() => setPhase("result"), RESULT_DELAY_MS);
+    const t = setTimeout(() => setPhase("result"), motion.resultDelayMs);
     return () => clearTimeout(t);
   }, [phase]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   if (!detail) {
-    return <NotFound onBack={() => navigate("/")} />;
+    return <NotFound onHome={() => navigate("/", { replace: true })} />;
   }
 
   const accent = categoryColors[detail.category];
@@ -54,19 +60,31 @@ export function VoteDetail() {
     setPhase("submitting");
   };
 
-  const handleShare = (channel: "kakao" | "instagram" | "url") => {
-    if (channel === "url") {
-      const url = `${window.location.origin}/vote/${detail.id}`;
-      try {
-        navigator.clipboard?.writeText(url);
-      } catch {
-        // ignore — dummy mode
+  const handleBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/", { replace: true });
+  };
+
+  const handleShare = async (channel: "kakao" | "instagram" | "url") => {
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+    try {
+      if (channel === "url") {
+        try {
+          await navigator.clipboard.writeText(getShareUrl(detail.id));
+          setToast("링크가 복사됐어요");
+        } catch {
+          setToast("복사에 실패했어요");
+        }
+        return;
       }
-      setToast("링크가 복사됐어요");
-      return;
+      const label = channel === "kakao" ? "카카오톡" : "인스타그램";
+      setToast(`${label} 공유는 곧 지원될 예정이에요`);
+    } finally {
+      setTimeout(() => {
+        sharingRef.current = false;
+      }, motion.toastMs);
     }
-    const label = channel === "kakao" ? "카카오톡" : "인스타그램";
-    setToast(`${label} 공유는 곧 지원될 예정이에요`);
   };
 
   return (
@@ -77,7 +95,7 @@ export function VoteDetail() {
         paddingBottom: spacing.xxl,
       }}
     >
-      <DetailHeader onBack={() => navigate(-1)} />
+      <DetailHeader onBack={handleBack} />
 
       <section
         style={{
@@ -100,9 +118,9 @@ export function VoteDetail() {
         <h1
           style={{
             margin: 0,
-            fontSize: 20,
-            fontWeight: 700,
-            lineHeight: 1.4,
+            fontSize: fontSize.heading,
+            fontWeight: fontWeight.bold,
+            lineHeight: lineHeight.tight,
             color: palette.textPrimary,
           }}
         >
@@ -112,7 +130,7 @@ export function VoteDetail() {
           style={{
             display: "flex",
             gap: spacing.md,
-            fontSize: 13,
+            fontSize: fontSize.label,
             color: palette.textSecondary,
           }}
         >
@@ -123,11 +141,7 @@ export function VoteDetail() {
 
       {phase === "unvoted" ? (
         <section style={{ margin: `0 ${spacing.lg}px` }}>
-          <VoteOptions
-            options={detail.options}
-            accent={accent}
-            onPick={handlePick}
-          />
+          <VoteOptions options={detail.options} onPick={handlePick} />
         </section>
       ) : null}
 
@@ -160,7 +174,13 @@ export function VoteDetail() {
         </>
       ) : null}
 
-      {toast ? <Toast message={toast} /> : null}
+      <Toast
+        position="bottom"
+        open={toast !== null}
+        text={toast ?? ""}
+        duration={motion.toastMs}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 }
@@ -171,7 +191,7 @@ function DetailHeader({ onBack }: { onBack: () => void }) {
       style={{
         display: "flex",
         alignItems: "center",
-        height: 52,
+        height: controlHeight.header,
         padding: `0 ${spacing.sm}px`,
       }}
     >
@@ -180,13 +200,13 @@ function DetailHeader({ onBack }: { onBack: () => void }) {
         onClick={onBack}
         aria-label="뒤로가기"
         style={{
-          width: 40,
-          height: 40,
+          width: controlHeight.iconButton,
+          height: controlHeight.iconButton,
           borderRadius: radius.pill,
           border: "none",
           background: "transparent",
           color: palette.textPrimary,
-          fontSize: 22,
+          fontSize: fontSize.hero,
           cursor: "pointer",
         }}
       >
@@ -214,7 +234,7 @@ function OverallResult({
         padding: spacing.lg,
         borderRadius: radius.lg,
         background: palette.background,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         display: "flex",
         flexDirection: "column",
         gap: spacing.md,
@@ -230,15 +250,17 @@ function OverallResult({
         <h3
           style={{
             margin: 0,
-            fontSize: 15,
-            fontWeight: 700,
+            fontSize: fontSize.subtitle,
+            fontWeight: fontWeight.bold,
             color: palette.textPrimary,
           }}
         >
           전체 결과
         </h3>
         {isClosed && !myOptionId ? (
-          <span style={{ fontSize: 12, color: palette.textSecondary }}>
+          <span
+            style={{ fontSize: fontSize.small, color: palette.textSecondary }}
+          >
             마감된 투표예요
           </span>
         ) : null}
@@ -269,22 +291,21 @@ function ResultSkeleton({ accentBar }: { accentBar: string }) {
         alignItems: "center",
         gap: spacing.sm,
         color: palette.textSecondary,
-        fontSize: 13,
+        fontSize: fontSize.label,
       }}
     >
       <div
         aria-hidden
         style={{
-          width: 28,
-          height: 28,
+          width: controlHeight.spinner,
+          height: controlHeight.spinner,
           borderRadius: radius.pill,
-          border: `3px solid ${palette.divider}`,
+          border: `${borderWidth.spinner}px solid ${palette.divider}`,
           borderTopColor: accentBar,
-          animation: "spin 700ms linear infinite",
+          animation: `vd-spin ${motion.spinMs}ms linear infinite`,
         }}
       />
       결과 집계 중…
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -301,8 +322,8 @@ function Pill({
   return (
     <span
       style={{
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: fontSize.caption,
+        fontWeight: fontWeight.medium,
         padding: `${spacing.xs}px ${spacing.sm}px`,
         borderRadius: radius.sm,
         background: bg,
@@ -314,31 +335,7 @@ function Pill({
   );
 }
 
-function Toast({ message }: { message: string }) {
-  return (
-    <div
-      role="status"
-      style={{
-        position: "fixed",
-        left: "50%",
-        bottom: spacing.xxl,
-        transform: "translateX(-50%)",
-        padding: `${spacing.md}px ${spacing.lg}px`,
-        borderRadius: radius.pill,
-        background: palette.textPrimary,
-        color: palette.background,
-        fontSize: 13,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-        zIndex: 100,
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
-function NotFound({ onBack }: { onBack: () => void }) {
+function NotFound({ onHome }: { onHome: () => void }) {
   return (
     <div
       style={{
@@ -353,29 +350,23 @@ function NotFound({ onBack }: { onBack: () => void }) {
         textAlign: "center",
       }}
     >
-      <span style={{ fontSize: 17, fontWeight: 700, color: palette.textPrimary }}>
-        투표를 찾을 수 없어요
-      </span>
-      <span style={{ fontSize: 13, color: palette.textSecondary }}>
-        잘못된 링크이거나 삭제된 투표일 수 있어요
-      </span>
-      <button
-        type="button"
-        onClick={onBack}
+      <span
         style={{
-          marginTop: spacing.sm,
-          padding: `${spacing.md}px ${spacing.xl}px`,
-          borderRadius: radius.md,
-          border: "none",
-          background: palette.brand,
-          color: palette.background,
-          fontSize: 14,
-          fontWeight: 700,
-          cursor: "pointer",
+          fontSize: fontSize.title,
+          fontWeight: fontWeight.bold,
+          color: palette.textPrimary,
         }}
       >
-        홈으로
-      </button>
+        투표를 찾을 수 없어요
+      </span>
+      <span style={{ fontSize: fontSize.label, color: palette.textSecondary }}>
+        잘못된 링크이거나 삭제된 투표일 수 있어요
+      </span>
+      <div style={{ marginTop: spacing.sm }}>
+        <Button size="medium" variant="fill" color="primary" onClick={onHome}>
+          홈으로
+        </Button>
+      </div>
     </div>
   );
 }

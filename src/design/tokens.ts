@@ -86,6 +86,7 @@ export const palette = {
   brand: "#534AB7",
   brandSurface: "#EEEDFE",
   brandText: "#3C3489",
+  error: "#D03A3A",
 } as const;
 
 export type CategoryKey = "all" | "daily" | "game" | "love" | "work" | "etc";
