@@ -14,3 +14,6 @@ dist-ssr/
 *.pem
 *.p12
 *.pfx
+
+# Adobe Illustrator 원본 (바이너리, 커밋 금지)
+verdict.ait
