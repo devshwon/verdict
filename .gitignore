@@ -6,3 +6,11 @@ dist-ssr/
 .env.*
 !.env.example
 .DS_Store
+
+# 인증서·키 파일은 절대 commit 금지 (mTLS, OAuth 등)
+*.key
+*.crt
+*.cert
+*.pem
+*.p12
+*.pfx
