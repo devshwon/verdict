@@ -34,10 +34,12 @@ function normalizeReferrer(input: string): Referrer | null {
 const TOSS_API_BASE = 'https://apps-in-toss-api.toss.im'
 const SYNTHETIC_EMAIL_DOMAIN = 'verdict.local'
 
+// supabase-js functions.invoke는 apikey, x-client-info 헤더를 자동 부착.
+// preflight에서 누락 시 브라우저가 실제 POST를 차단 → 함수 미도달.
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Max-Age': '86400',
 }
 
