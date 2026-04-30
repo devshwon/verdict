@@ -1,4 +1,4 @@
-import type { FeedVote, TodayVote } from "./types";
+import type { FeedVote, PastTodayVote, TodayVote } from "./types";
 
 export const todayVotes: Record<TodayVote["category"], TodayVote> = {
   daily: {
@@ -30,6 +30,78 @@ export const todayVotes: Record<TodayVote["category"], TodayVote> = {
     remainingLabel: "01:55:09 남음",
   },
 };
+
+const pastTodayVotesRaw: PastTodayVote[] = [
+  {
+    id: "past-today-1",
+    category: "daily",
+    question: "엘베에서 모르는 사람과 인사, 해야 해?",
+    participants: 5210,
+    endedAt: "2026-04-29",
+    unlocked: false,
+  },
+  {
+    id: "past-today-2",
+    category: "love",
+    question: "데이트 비용, 더치페이가 기본?",
+    participants: 4880,
+    endedAt: "2026-04-28",
+    unlocked: false,
+  },
+  {
+    id: "past-today-3",
+    category: "work",
+    question: "월요일 오전 회의, 폐지가 답?",
+    participants: 6120,
+    endedAt: "2026-04-27",
+    unlocked: true,
+  },
+  {
+    id: "past-today-4",
+    category: "game",
+    question: "솔로랭크 듀오, 매너 위반?",
+    participants: 3340,
+    endedAt: "2026-04-26",
+    unlocked: false,
+  },
+  {
+    id: "past-today-5",
+    category: "daily",
+    question: "지하철에서 통화, 매너 위반?",
+    participants: 4012,
+    endedAt: "2026-04-25",
+    unlocked: false,
+  },
+  {
+    id: "past-today-6",
+    category: "love",
+    question: "전 애인 SNS 팔로우, 정상?",
+    participants: 2980,
+    endedAt: "2026-04-24",
+    unlocked: false,
+  },
+  {
+    id: "past-today-7",
+    category: "work",
+    question: "점심 혼밥, 회사에서 해도 돼?",
+    participants: 3560,
+    endedAt: "2026-04-23",
+    unlocked: false,
+  },
+];
+
+export const pastTodayVotes: PastTodayVote[] = [...pastTodayVotesRaw].sort(
+  (a, b) => b.endedAt.localeCompare(a.endedAt)
+);
+
+export function getRecentPastVotes(
+  category: PastTodayVote["category"] | "all" | "etc",
+  limit = 5
+): PastTodayVote[] {
+  if (category === "etc") return [];
+  if (category === "all") return pastTodayVotes.slice(0, limit);
+  return pastTodayVotes.filter((v) => v.category === category).slice(0, limit);
+}
 
 export const feedVotes: FeedVote[] = [
   {
