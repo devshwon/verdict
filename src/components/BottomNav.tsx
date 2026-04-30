@@ -43,7 +43,7 @@ export function BottomNav() {
         display: "flex",
         background: palette.background,
         borderTop: `${borderWidth.hairline}px solid ${palette.border}`,
-        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingBottom: `max(${spacing.sm}px, min(env(safe-area-inset-bottom), ${spacing.md}px))`,
       }}
     >
       {NAV_ITEMS.map(({ to, label, match, Icon }) => {
