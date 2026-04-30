@@ -1,5 +1,4 @@
 import { Route, Routes } from "react-router-dom";
-import { BottomNav } from "./components/BottomNav";
 import { AuthGate } from "./features/auth/AuthGate";
 import { HomeFeed } from "./features/home/HomeFeed";
 import { MyPage } from "./features/mypage/MyPage";
@@ -16,7 +15,6 @@ function App() {
         <Route path="/register" element={<RegisterScreen />} />
         <Route path="/mypage" element={<MyPage />} />
       </Routes>
-      <BottomNav />
     </AuthGate>
   );
 }

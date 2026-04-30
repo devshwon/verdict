@@ -30,16 +30,14 @@ export function CategoryTabs({ active, onChange }: Props) {
     >
       {categories.map((c) => {
         const isActive = c.key === active;
-        const color =
-          c.key === "all"
-            ? { surface: palette.brandSurface, text: palette.brandText, bar: palette.brand }
-            : categoryColors[c.key];
+        const color = categoryColors[c.key];
 
         return (
           <button
             key={c.key}
             type="button"
             onClick={() => onChange(c.key)}
+            aria-pressed={isActive}
             style={{
               flexShrink: 0,
               padding: `${spacing.sm}px ${spacing.md}px`,

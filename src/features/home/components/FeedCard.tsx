@@ -1,6 +1,7 @@
 import { Button } from "@toss/tds-mobile";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Pill } from "../../../components/Pill";
 import {
   borderWidth,
   categories,
@@ -23,8 +24,7 @@ type Props = {
 
 export function FeedCard({ vote }: Props) {
   const navigate = useNavigate();
-  const goDetail = () => navigate(`/vote/${vote.id}`);
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const navigatingRef = useRef(false);
   const cat = categoryColors[vote.category];
   const tag = feedTagStyles[vote.tag];
   const categoryLabel =
@@ -32,6 +32,22 @@ export function FeedCard({ vote }: Props) {
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [voted, setVoted] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const goDetail = () => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    navigate(`/vote/${vote.id}`);
+  };
+
+  const handleCardKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      goDetail();
+    }
+  };
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   const showResults = vote.showResultBar || voted;
   const pendingOption =
@@ -39,9 +55,19 @@ export function FeedCard({ vote }: Props) {
       ? vote.options.find((o) => o.id === pendingId) ?? null
       : null;
 
+  const confirmVote = () => {
+    if (confirming || voted || pendingId === null) return;
+    setConfirming(true);
+    setVoted(true);
+    setPendingId(null);
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={goDetail}
+      onKeyDown={handleCardKey}
       style={{
         margin: `${spacing.sm}px ${spacing.lg}px`,
         padding: spacing.lg,
@@ -125,8 +151,10 @@ export function FeedCard({ vote }: Props) {
                 <button
                   key={opt.id}
                   type="button"
+                  disabled={confirming}
                   onClick={(e) => {
                     stop(e);
+                    if (confirming) return;
                     setPendingId((prev) => (prev === opt.id ? null : opt.id));
                   }}
                   aria-pressed={isPending}
@@ -141,7 +169,7 @@ export function FeedCard({ vote }: Props) {
                     color: isPending ? cat.text : palette.textPrimary,
                     fontSize: fontSize.body,
                     fontWeight: fontWeight.medium,
-                    cursor: "pointer",
+                    cursor: confirming ? "default" : "pointer",
                   }}
                 >
                   {opt.label}
@@ -177,6 +205,7 @@ export function FeedCard({ vote }: Props) {
                   size="small"
                   variant="weak"
                   color="dark"
+                  disabled={confirming}
                   onClick={() => setPendingId(null)}
                 >
                   취소
@@ -187,10 +216,8 @@ export function FeedCard({ vote }: Props) {
                   size="small"
                   variant="fill"
                   color="primary"
-                  onClick={() => {
-                    setVoted(true);
-                    setPendingId(null);
-                  }}
+                  disabled={confirming}
+                  onClick={confirmVote}
                 >
                   확정
                 </Button>
@@ -200,31 +227,6 @@ export function FeedCard({ vote }: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-function Pill({
-  bg,
-  fg,
-  children,
-}: {
-  bg: string;
-  fg: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <span
-      style={{
-        fontSize: fontSize.caption,
-        fontWeight: fontWeight.medium,
-        padding: `${spacing.xs}px ${spacing.sm}px`,
-        borderRadius: radius.sm,
-        background: bg,
-        color: fg,
-      }}
-    >
-      {children}
-    </span>
   );
 }
 

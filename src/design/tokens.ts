@@ -54,7 +54,6 @@ export const controlHeight = {
 } as const;
 
 export const layout = {
-  bottomNavReserve: 72,
   avatarSize: 48,
   resultLabelSm: 56,
   resultLabelMd: 64,
@@ -127,9 +126,10 @@ export const registerCategories: {
 );
 
 export const categoryColors: Record<
-  Exclude<CategoryKey, "all">,
+  CategoryKey,
   { surface: string; text: string; bar: string }
 > = {
+  all: { surface: "#EEEDFE", text: "#3C3489", bar: "#534AB7" },
   daily: { surface: "#EEEDFE", text: "#3C3489", bar: "#534AB7" },
   game: { surface: "#E1F5EE", text: "#085041", bar: "#1D9E75" },
   love: { surface: "#FBEAF0", text: "#72243E", bar: "#D4537E" },
