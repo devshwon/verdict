@@ -11,8 +11,9 @@ import {
 import { AdBanner } from "./components/AdBanner";
 import { CategoryTabs } from "./components/CategoryTabs";
 import { FeedCard } from "./components/FeedCard";
+import { PastTodayCarousel } from "./components/PastTodayCarousel";
 import { TodayVoteCard } from "./components/TodayVoteCard";
-import { feedVotes, todayVotes } from "./mocks";
+import { feedVotes, getRecentPastVotes, todayVotes } from "./mocks";
 import type { TodayVote } from "./types";
 
 export function HomeFeed() {
@@ -30,12 +31,16 @@ export function HomeFeed() {
       ? todayVotes[active]
       : null;
 
+  const carouselItems = getRecentPastVotes(active);
+
   return (
     <AppShell footer={<AdBanner />}>
       <Top
-        title={<Top.TitleParagraph size={22}>판정단</Top.TitleParagraph>}
+        title={
+          <Top.TitleParagraph size={fontSize.hero}>판정단</Top.TitleParagraph>
+        }
         subtitleBottom={
-          <Top.SubtitleParagraph size={15}>
+          <Top.SubtitleParagraph size={fontSize.subtitle}>
             대중의 평균값이 궁금할 때
           </Top.SubtitleParagraph>
         }
@@ -44,6 +49,8 @@ export function HomeFeed() {
       <CategoryTabs active={active} onChange={setActive} />
 
       {todayVote ? <TodayVoteCard vote={todayVote} /> : null}
+
+      <PastTodayCarousel items={carouselItems} />
 
       {filteredFeed.length === 0 ? (
         <EmptyState />

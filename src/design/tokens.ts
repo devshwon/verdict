@@ -59,7 +59,28 @@ export const layout = {
   resultLabelMd: 64,
   resultRatioColumn: 36,
   divider: 1,
+  pastVoteCardWidth: 220,
+  pastVoteQuestionMinHeight: 40,
 } as const;
+
+export const blur = {
+  lock: 4,
+} as const;
+
+export const iconSize = {
+  nav: 24,
+} as const;
+
+export const iconStroke = {
+  regular: 1.8,
+} as const;
+
+export const zIndex = {
+  toast: 50,
+  modal: 100,
+} as const;
+
+export const LOCKED_QUESTION_MASK = "●●●●●●●●●●";
 
 export const borderWidth = {
   hairline: 1,
