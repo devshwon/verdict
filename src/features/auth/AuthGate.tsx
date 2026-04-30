@@ -1,5 +1,5 @@
 import { Button } from "@toss/tds-mobile";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   fontSize,
@@ -20,12 +20,17 @@ interface Props {
 export function AuthGate({ children }: Props) {
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState<string | null>(null);
+  // StrictMode dev 2회 마운트 / 동시 클릭으로 appLogin이 중복 호출되면
+  // authorizationCode가 한쪽에서 소진되어 invalid_grant 발생. 진행 중 가드.
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     bootstrap();
   }, []);
 
   async function bootstrap() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setStatus("loading");
     setError(null);
     try {
@@ -41,6 +46,8 @@ export function AuthGate({ children }: Props) {
       console.error("[AuthGate] bootstrap failed:", msg);
       setError(msg);
       setStatus("error");
+    } finally {
+      inFlightRef.current = false;
     }
   }
 
