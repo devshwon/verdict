@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
 
     const { data: existing, error: lookupErr } = await admin
       .from('users')
-      .select('id')
+      .select('id, gender_public, age_public')
       .eq('toss_user_key', userKey)
       .maybeSingle()
     if (lookupErr) throw lookupErr
@@ -227,10 +227,16 @@ Deno.serve(async (req) => {
     let userId: string
     if (existing) {
       userId = existing.id
-      // demographics 동기화 (값 바뀐 경우 반영)
+      // demographics 동기화 — 사용자가 비공개로 토글한 항목은 'undisclosed' 유지 (§4-4)
+      // 마이그레이션 20260430000007: gender_public / age_public 도입
+      const genderPublic = (existing as { gender_public?: boolean }).gender_public ?? true
+      const agePublic = (existing as { age_public?: boolean }).age_public ?? true
       const { error: updErr } = await admin
         .from('users')
-        .update({ gender, age_bucket: ageBucket })
+        .update({
+          gender: genderPublic ? gender : 'undisclosed',
+          age_bucket: agePublic ? ageBucket : 'undisclosed',
+        })
         .eq('id', userId)
       if (updErr) throw updErr
     } else {

@@ -27,8 +27,8 @@ type Props = {
 export function PastVoteCard({ vote, variant }: Props) {
   const navigate = useNavigate();
   const { isUnlocked, isPending, unlock } = useUnlock();
-  // FIXME: mock 한정. API 연동 시 vote.unlocked 필드를 응답에서 제거하고
-  // App.tsx의 UnlockProvider에 initialUnlockedIds로 hydrate해 단일 원천으로 만들 것.
+  // 두 소스 합집합: 서버 fetch(vote.unlocked) ∪ 이번 세션 unlock(isUnlocked).
+  // 마운트 직후 UnlockProvider hydrate 전 짧은 윈도우에 vote.unlocked로 즉시 반영.
   const unlocked = isUnlocked(vote.id) || vote.unlocked;
   const pending = isPending(vote.id);
   const color = categoryColors[vote.category];
