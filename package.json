@@ -4,20 +4,22 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "granite dev",
+    "dev": "ait dev",
     "build": "ait build",
     "deploy": "ait deploy",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@apps-in-toss/web-framework": "^1.14.1",
+    "@apps-in-toss/web-framework": "^2.0.2",
     "@emotion/react": "^11.14.0",
+    "@supabase/supabase-js": "^2.105.1",
     "@toss/tds-colors": "^0.1.0",
     "@toss/tds-mobile": "^2.3.0",
     "@toss/tds-mobile-ait": "^2.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

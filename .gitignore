@@ -6,3 +6,14 @@ dist-ssr/
 .env.*
 !.env.example
 .DS_Store
+
+# 인증서·키 파일은 절대 commit 금지 (mTLS, OAuth 등)
+*.key
+*.crt
+*.cert
+*.pem
+*.p12
+*.pfx
+
+# Adobe Illustrator 원본 (바이너리, 커밋 금지)
+verdict.ait

@@ -1,7 +1,12 @@
 import { Button } from "@toss/tds-mobile";
+import { useNavigate } from "react-router-dom";
 import {
+  borderWidth,
   categories,
   categoryColors,
+  fontSize,
+  fontWeight,
+  lineHeight,
   palette,
   radius,
   spacing,
@@ -14,28 +19,32 @@ type Props = {
 };
 
 export function TodayVoteCard({ vote }: Props) {
+  const navigate = useNavigate();
+  const goDetail = () => navigate(`/vote/${vote.id}`);
   const color = categoryColors[vote.category];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
 
   return (
     <div
+      onClick={goDetail}
       style={{
         margin: `${spacing.sm}px ${spacing.lg}px`,
         padding: spacing.lg,
         borderRadius: radius.lg,
-        border: `1.5px solid ${color.bar}`,
+        border: `${borderWidth.thick}px solid ${color.bar}`,
         background: color.surface,
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: "pointer",
       }}
     >
       <div style={{ display: "flex", gap: spacing.xs }}>
         <span
           style={{
-            fontSize: 11,
-            fontWeight: 600,
+            fontSize: fontSize.caption,
+            fontWeight: fontWeight.medium,
             padding: `${spacing.xs}px ${spacing.sm}px`,
             borderRadius: radius.sm,
             background: todayTagStyle.surface,
@@ -48,10 +57,10 @@ export function TodayVoteCard({ vote }: Props) {
 
       <div
         style={{
-          fontSize: 17,
-          fontWeight: 700,
+          fontSize: fontSize.title,
+          fontWeight: fontWeight.bold,
           color: palette.textPrimary,
-          lineHeight: 1.4,
+          lineHeight: lineHeight.tight,
         }}
       >
         “{vote.question}”
@@ -64,15 +73,28 @@ export function TodayVoteCard({ vote }: Props) {
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: color.bar }}>
+        <span
+          style={{
+            fontSize: fontSize.label,
+            fontWeight: fontWeight.medium,
+            color: color.bar,
+          }}
+        >
           {vote.remainingLabel}
         </span>
-        <span style={{ fontSize: 12, color: palette.textSecondary }}>
+        <span style={{ fontSize: fontSize.small, color: palette.textSecondary }}>
           {vote.participants.toLocaleString()}명 참여
         </span>
       </div>
 
-      <Button variant="fill" size="medium" disabled>
+      <Button
+        variant="fill"
+        size="medium"
+        onClick={(e) => {
+          e.stopPropagation();
+          goDetail();
+        }}
+      >
         투표하기
       </Button>
     </div>

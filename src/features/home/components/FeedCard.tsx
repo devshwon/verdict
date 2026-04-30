@@ -1,8 +1,16 @@
+import { Button } from "@toss/tds-mobile";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  borderWidth,
   categories,
   categoryColors,
+  controlHeight,
   feedTagStyles,
+  fontSize,
+  fontWeight,
+  layout,
+  lineHeight,
   palette,
   radius,
   spacing,
@@ -14,6 +22,9 @@ type Props = {
 };
 
 export function FeedCard({ vote }: Props) {
+  const navigate = useNavigate();
+  const goDetail = () => navigate(`/vote/${vote.id}`);
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
   const cat = categoryColors[vote.category];
   const tag = feedTagStyles[vote.tag];
   const categoryLabel =
@@ -30,15 +41,17 @@ export function FeedCard({ vote }: Props) {
 
   return (
     <div
+      onClick={goDetail}
       style={{
         margin: `${spacing.sm}px ${spacing.lg}px`,
         padding: spacing.lg,
         borderRadius: radius.lg,
-        border: `1px solid ${palette.border}`,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
         background: palette.background,
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: "pointer",
       }}
     >
       <div
@@ -57,7 +70,7 @@ export function FeedCard({ vote }: Props) {
         <span
           style={{
             marginLeft: "auto",
-            fontSize: 12,
+            fontSize: fontSize.small,
             color: palette.textSecondary,
           }}
         >
@@ -69,10 +82,10 @@ export function FeedCard({ vote }: Props) {
 
       <div
         style={{
-          fontSize: 15,
-          fontWeight: 600,
+          fontSize: fontSize.subtitle,
+          fontWeight: fontWeight.medium,
           color: palette.textPrimary,
-          lineHeight: 1.45,
+          lineHeight: lineHeight.body,
         }}
       >
         “{vote.question}”
@@ -85,8 +98,8 @@ export function FeedCard({ vote }: Props) {
           {voted ? (
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 600,
+                fontSize: fontSize.small,
+                fontWeight: fontWeight.medium,
                 color: cat.bar,
               }}
             >
@@ -97,9 +110,7 @@ export function FeedCard({ vote }: Props) {
             <ResultBar
               key={opt.id}
               option={opt}
-              barColor={
-                opt.ratio >= 50 ? cat.bar : palette.textTertiary
-              }
+              barColor={opt.ratio >= 50 ? cat.bar : palette.textTertiary}
             />
           ))}
         </div>
@@ -114,21 +125,22 @@ export function FeedCard({ vote }: Props) {
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() =>
-                    setPendingId((prev) => (prev === opt.id ? null : opt.id))
-                  }
+                  onClick={(e) => {
+                    stop(e);
+                    setPendingId((prev) => (prev === opt.id ? null : opt.id));
+                  }}
                   aria-pressed={isPending}
                   style={{
                     flex: 1,
-                    padding: `${spacing.sm + 2}px 0`,
+                    padding: `${spacing.md}px 0`,
                     borderRadius: radius.md,
-                    border: `1px solid ${
+                    border: `${borderWidth.hairline}px solid ${
                       isPending ? cat.bar : palette.border
                     }`,
                     background: isPending ? cat.surface : palette.surface,
                     color: isPending ? cat.text : palette.textPrimary,
-                    fontSize: 14,
-                    fontWeight: 600,
+                    fontSize: fontSize.body,
+                    fontWeight: fontWeight.medium,
                     cursor: "pointer",
                   }}
                 >
@@ -152,49 +164,37 @@ export function FeedCard({ vote }: Props) {
               <span
                 style={{
                   flex: 1,
-                  fontSize: 13,
-                  fontWeight: 600,
+                  fontSize: fontSize.label,
+                  fontWeight: fontWeight.medium,
                   color: cat.text,
-                  lineHeight: 1.4,
+                  lineHeight: lineHeight.tight,
                 }}
               >
                 ‘{pendingOption.label}’(으)로 투표할까요?
               </span>
-              <button
-                type="button"
-                onClick={() => setPendingId(null)}
-                style={{
-                  padding: `${spacing.xs}px ${spacing.md}px`,
-                  borderRadius: radius.sm,
-                  border: `1px solid ${palette.border}`,
-                  background: palette.background,
-                  color: palette.textSecondary,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setVoted(true);
-                  setPendingId(null);
-                }}
-                style={{
-                  padding: `${spacing.xs}px ${spacing.md}px`,
-                  borderRadius: radius.sm,
-                  border: "none",
-                  background: cat.bar,
-                  color: palette.background,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                확정
-              </button>
+              <div onClick={stop}>
+                <Button
+                  size="small"
+                  variant="weak"
+                  color="dark"
+                  onClick={() => setPendingId(null)}
+                >
+                  취소
+                </Button>
+              </div>
+              <div onClick={stop}>
+                <Button
+                  size="small"
+                  variant="fill"
+                  color="primary"
+                  onClick={() => {
+                    setVoted(true);
+                    setPendingId(null);
+                  }}
+                >
+                  확정
+                </Button>
+              </div>
             </div>
           ) : null}
         </div>
@@ -215,8 +215,8 @@ function Pill({
   return (
     <span
       style={{
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: fontSize.caption,
+        fontWeight: fontWeight.medium,
         padding: `${spacing.xs}px ${spacing.sm}px`,
         borderRadius: radius.sm,
         background: bg,
@@ -239,9 +239,9 @@ function ResultBar({
     <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
       <span
         style={{
-          fontSize: 12,
+          fontSize: fontSize.small,
           color: palette.textSecondary,
-          width: 56,
+          width: layout.resultLabelSm,
           flexShrink: 0,
         }}
       >
@@ -250,7 +250,7 @@ function ResultBar({
       <div
         style={{
           flex: 1,
-          height: 8,
+          height: controlHeight.bar,
           borderRadius: radius.sm,
           background: palette.divider,
           overflow: "hidden",
@@ -267,9 +267,9 @@ function ResultBar({
       </div>
       <span
         style={{
-          fontSize: 12,
-          fontWeight: 600,
-          width: 36,
+          fontSize: fontSize.small,
+          fontWeight: fontWeight.medium,
+          width: layout.resultRatioColumn,
           textAlign: "right",
           color: barColor,
         }}

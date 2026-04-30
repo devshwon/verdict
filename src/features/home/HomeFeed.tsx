@@ -2,6 +2,8 @@ import { Top } from "@toss/tds-mobile";
 import { Fragment, useMemo, useState } from "react";
 import {
   TODAY_CARD_CATEGORIES,
+  fontSize,
+  layout,
   palette,
   spacing,
   type CategoryKey,
@@ -35,7 +37,7 @@ export function HomeFeed() {
       style={{
         background: palette.surface,
         minHeight: "100vh",
-        paddingBottom: spacing.xxl,
+        paddingBottom: layout.bottomNavReserve,
       }}
     >
       <Top
@@ -73,7 +75,7 @@ function EmptyState() {
         padding: spacing.xl,
         textAlign: "center",
         color: palette.textSecondary,
-        fontSize: 14,
+        fontSize: fontSize.body,
       }}
     >
       표시할 투표가 없어요.

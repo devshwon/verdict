@@ -8,25 +8,26 @@ import {
   spacing,
 } from "../../../design/tokens";
 
-export function AdBanner() {
+// TODO: AIT 비즈월렛 광고 SDK로 교체
+export function AdSlot() {
   return (
     <div
       style={{
-        margin: `${spacing.sm}px ${spacing.lg}px`,
-        padding: spacing.lg,
+        margin: `${spacing.md}px ${spacing.lg}px`,
+        padding: `${spacing.lg}px`,
         borderRadius: radius.md,
+        background: palette.divider,
         border: `${borderWidth.hairline}px dashed ${palette.border}`,
-        background: palette.surface,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        height: controlHeight.adBanner,
+        minHeight: controlHeight.ad,
         color: palette.textSecondary,
         fontSize: fontSize.label,
-        fontWeight: fontWeight.regular,
+        fontWeight: fontWeight.medium,
       }}
     >
-      광고 배너 영역
+      광고 영역
     </div>
   );
 }
