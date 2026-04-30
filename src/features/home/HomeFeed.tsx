@@ -1,9 +1,9 @@
 import { Top } from "@toss/tds-mobile";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { AppShell } from "../../components/AppShell";
 import {
   TODAY_CARD_CATEGORIES,
   fontSize,
-  layout,
   palette,
   spacing,
   type CategoryKey,
@@ -14,8 +14,6 @@ import { FeedCard } from "./components/FeedCard";
 import { TodayVoteCard } from "./components/TodayVoteCard";
 import { feedVotes, todayVotes } from "./mocks";
 import type { TodayVote } from "./types";
-
-const AD_INSERT_INDEX = 2;
 
 export function HomeFeed() {
   const [active, setActive] = useState<CategoryKey>("all");
@@ -33,13 +31,7 @@ export function HomeFeed() {
       : null;
 
   return (
-    <div
-      style={{
-        background: palette.surface,
-        minHeight: "100vh",
-        paddingBottom: layout.bottomNavReserve,
-      }}
-    >
+    <AppShell footer={<AdBanner />}>
       <Top
         title={<Top.TitleParagraph size={22}>판정단</Top.TitleParagraph>}
         subtitleBottom={
@@ -56,14 +48,9 @@ export function HomeFeed() {
       {filteredFeed.length === 0 ? (
         <EmptyState />
       ) : (
-        filteredFeed.map((vote, idx) => (
-          <Fragment key={vote.id}>
-            <FeedCard vote={vote} />
-            {idx === AD_INSERT_INDEX ? <AdBanner /> : null}
-          </Fragment>
-        ))
+        filteredFeed.map((vote) => <FeedCard key={vote.id} vote={vote} />)
       )}
-    </div>
+    </AppShell>
   );
 }
 

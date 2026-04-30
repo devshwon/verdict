@@ -4,8 +4,6 @@ import {
   fontSize,
   fontWeight,
   palette,
-  radius,
-  shadow,
   spacing,
 } from "../design/tokens";
 
@@ -21,24 +19,14 @@ const NAV_ITEMS: {
 
 export function BottomNav() {
   const { pathname } = useLocation();
-  const isVisible = NAV_ITEMS.some((it) => it.match(pathname));
-  if (!isVisible) return null;
 
   return (
     <nav
       style={{
-        position: "fixed",
-        bottom: spacing.lg,
-        left: "50%",
-        transform: "translateX(-50%)",
         display: "flex",
-        gap: spacing.xs,
-        padding: spacing.xs,
         background: palette.background,
-        borderRadius: radius.pill,
-        border: `${borderWidth.hairline}px solid ${palette.border}`,
-        boxShadow: shadow.md,
-        zIndex: 10,
+        borderTop: `${borderWidth.hairline}px solid ${palette.border}`,
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {NAV_ITEMS.map((it) => {
@@ -47,13 +35,14 @@ export function BottomNav() {
           <Link
             key={it.to}
             to={it.to}
+            aria-current={isActive ? "page" : undefined}
             style={{
-              padding: `${spacing.sm}px ${spacing.lg}px`,
-              borderRadius: radius.pill,
-              background: isActive ? palette.brandSurface : "transparent",
+              flex: 1,
+              padding: `${spacing.md}px 0`,
+              textAlign: "center",
               color: isActive ? palette.brandText : palette.textSecondary,
               fontSize: fontSize.label,
-              fontWeight: fontWeight.bold,
+              fontWeight: isActive ? fontWeight.bold : fontWeight.medium,
               textDecoration: "none",
             }}
           >
