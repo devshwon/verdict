@@ -1,6 +1,7 @@
 import { Top, Toast } from "@toss/tds-mobile";
 import { useState } from "react";
-import { layout, motion, palette, spacing } from "../../design/tokens";
+import { AppShell } from "../../components/AppShell";
+import { motion, spacing } from "../../design/tokens";
 import { CategoryPicker } from "./components/CategoryPicker";
 import { ChoiceList } from "./components/ChoiceList";
 import { DurationPicker } from "./components/DurationPicker";
@@ -13,17 +14,18 @@ export function RegisterScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const form = useRegisterForm({
     onSuccess: () => setToast("등록되었어요"),
+    onError: () => setToast("등록에 실패했어요. 잠시 후 다시 시도해주세요."),
   });
 
   return (
-    <div
-      style={{
-        background: palette.surface,
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        paddingBottom: layout.bottomNavReserve,
-      }}
+    <AppShell
+      footer={
+        <SubmitBar
+          disabled={!form.canSubmit}
+          loading={form.submitting}
+          onSubmit={form.submit}
+        />
+      }
     >
       <Top
         title={<Top.TitleParagraph size={22}>질문 등록</Top.TitleParagraph>}
@@ -34,7 +36,7 @@ export function RegisterScreen() {
         }
       />
 
-      <div style={{ flex: 1, paddingBottom: spacing.xxl }}>
+      <div style={{ paddingBottom: spacing.xxl }}>
         <QuestionInput
           value={form.question}
           errorMessage={form.errors.question}
@@ -60,22 +62,13 @@ export function RegisterScreen() {
           }}
         />
 
-        <DurationPicker
-          value={form.duration}
-          onChange={form.setDuration}
-        />
+        <DurationPicker value={form.duration} onChange={form.setDuration} />
 
         <TodayCandidateToggle
           checked={form.todayCandidate}
           onChange={form.setTodayCandidate}
         />
       </div>
-
-      <SubmitBar
-        disabled={!form.canSubmit}
-        loading={form.submitting}
-        onSubmit={form.submit}
-      />
 
       {toast !== null ? (
         <Toast
@@ -86,6 +79,6 @@ export function RegisterScreen() {
           onClose={() => setToast(null)}
         />
       ) : null}
-    </div>
+    </AppShell>
   );
 }

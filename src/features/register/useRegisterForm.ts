@@ -19,7 +19,7 @@ function buildPayload(
   filledChoices: string[],
   category: RegisterCategory | null,
   duration: DurationKey,
-  todayCandidate: boolean
+  todayCandidate: boolean,
 ): RegisterPayload | null {
   if (
     question.trim().length === 0 ||
@@ -40,10 +40,15 @@ function buildPayload(
 
 type Options = {
   onSuccess?: (payload: RegisterPayload) => void;
+  onError?: (error: unknown) => void;
+  submitFn?: (payload: RegisterPayload) => Promise<void>;
 };
 
+const defaultSubmitFn = (): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, SUBMIT_DELAY_MS));
+
 export function useRegisterForm(options: Options = {}) {
-  const { onSuccess } = options;
+  const { onSuccess, onError, submitFn = defaultSubmitFn } = options;
   const idCounterRef = useRef(2);
   const [question, setQuestion] = useState("");
   const [choices, setChoices] = useState<Choice[]>([
@@ -57,26 +62,18 @@ export function useRegisterForm(options: Options = {}) {
   const [touched, setTouched] = useState<TouchedMap>({});
 
   const submittingRef = useRef(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
     };
   }, []);
 
   const filledChoices = useMemo(
-    () =>
-      choices
-        .map((c) => c.value.trim())
-        .filter((v) => v.length > 0),
-    [choices]
+    () => choices.map((c) => c.value.trim()).filter((v) => v.length > 0),
+    [choices],
   );
 
   const errors: RegisterErrors = useMemo(() => {
@@ -101,8 +98,7 @@ export function useRegisterForm(options: Options = {}) {
     return v;
   }, [errors, touched]);
 
-  const canSubmit =
-    Object.keys(errors).length === 0 && !submitting;
+  const canSubmit = Object.keys(errors).length === 0 && !submitting;
 
   const updateQuestion = (next: string) => {
     if (next.length > QUESTION_MAX_LENGTH) return;
@@ -111,7 +107,7 @@ export function useRegisterForm(options: Options = {}) {
 
   const updateChoice = (id: string, next: string) => {
     setChoices((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, value: next } : c))
+      prev.map((c) => (c.id === id ? { ...c, value: next } : c)),
     );
   };
 
@@ -148,7 +144,7 @@ export function useRegisterForm(options: Options = {}) {
     setTouched({});
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (submittingRef.current) return;
     setTouched({ question: true, choices: true, category: true });
 
@@ -157,22 +153,27 @@ export function useRegisterForm(options: Options = {}) {
       filledChoices,
       category,
       duration,
-      todayCandidate
+      todayCandidate,
     );
     if (payload === null) return;
 
     submittingRef.current = true;
     setSubmitting(true);
 
-    timeoutRef.current = setTimeout(() => {
-      timeoutRef.current = null;
+    try {
+      await submitFn(payload);
       if (!mountedRef.current) return;
-      setSubmitting(false);
-      submittingRef.current = false;
-      // TODO: 실제 등록 API 연동 시 교체
       onSuccess?.(payload);
       resetForm();
-    }, SUBMIT_DELAY_MS);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      onError?.(e);
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false);
+      }
+      submittingRef.current = false;
+    }
   };
 
   return {

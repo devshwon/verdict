@@ -1,5 +1,5 @@
 import { Button } from "@toss/tds-mobile";
-import { borderWidth, layout, palette, spacing } from "../../../design/tokens";
+import { borderWidth, palette, spacing } from "../../../design/tokens";
 
 type Props = {
   disabled: boolean;
@@ -11,8 +11,6 @@ export function SubmitBar({ disabled, loading, onSubmit }: Props) {
   return (
     <div
       style={{
-        position: "sticky",
-        bottom: layout.bottomNavReserve,
         padding: spacing.lg,
         background: palette.background,
         borderTop: `${borderWidth.hairline}px solid ${palette.divider}`,

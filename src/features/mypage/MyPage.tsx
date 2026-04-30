@@ -1,5 +1,5 @@
 import { Top } from "@toss/tds-mobile";
-import { layout, palette } from "../../design/tokens";
+import { AppShell } from "../../components/AppShell";
 import { MyVotesSection } from "./components/MyVotesSection";
 import { ParticipatedSection } from "./components/ParticipatedSection";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -8,13 +8,7 @@ import { myStats, myVotes, participatedVotes, profile } from "./mocks";
 
 export function MyPage() {
   return (
-    <div
-      style={{
-        background: palette.surface,
-        minHeight: "100vh",
-        paddingBottom: layout.bottomNavReserve,
-      }}
-    >
+    <AppShell>
       <Top
         title={<Top.TitleParagraph size={22}>마이</Top.TitleParagraph>}
         subtitleBottom={
@@ -28,6 +22,6 @@ export function MyPage() {
       <StatGrid stats={myStats} />
       <MyVotesSection votes={myVotes} />
       <ParticipatedSection votes={participatedVotes} />
-    </div>
+    </AppShell>
   );
 }
