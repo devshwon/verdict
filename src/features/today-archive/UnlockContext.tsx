@@ -6,6 +6,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  fetchAllUserUnlocks,
+  registerAdWatch,
+  unlockVoteResults,
+} from "../../lib/db/votes";
 import { UnlockContext, type WatchAd } from "./unlockContextValue";
 
 const AD_TIMEOUT_MS = 15_000;
@@ -27,6 +32,32 @@ export function UnlockProvider({
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [lastError, setLastError] = useState<string | null>(null);
   const controllers = useRef<Map<string, AbortController>>(new Map());
+  const hydratedRef = useRef(false);
+
+  // 마운트 직후 1회: 서버 vote_unlocks 본인 row 전체 fetch → 영구 보유 unlock 복원
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ids = await fetchAllUserUnlocks();
+        if (cancelled) return;
+        setUnlockedIds((prev) => {
+          if (ids.length === 0) return prev;
+          const next = new Set(prev);
+          for (const id of ids) next.add(id);
+          return next;
+        });
+      } catch (e) {
+        // hydrate 실패는 조용히 — 사용자가 다시 광고 보면 unlock RPC가 멱등 처리
+        console.error("[UnlockProvider] hydrate failed:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isUnlocked = useCallback(
     (id: string) => unlockedIds.has(id),
@@ -61,6 +92,16 @@ export function UnlockProvider({
 
       try {
         await watchAd(id, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        // 광고 시청 완료 → register-ad-watch로 토큰 발급
+        const tokenOutcome = await registerAdWatch("unlock_vote_result");
+        if (ctrl.signal.aborted) return;
+        if (!tokenOutcome.ok) {
+          setLastError(tokenOutcome.message);
+          return;
+        }
+        // 토큰을 RPC에 전달하여 서버 영구 unlock 발급
+        await unlockVoteResults(id, tokenOutcome.adToken);
         if (ctrl.signal.aborted) return;
         setUnlockedIds((prev) => {
           const next = new Set(prev);

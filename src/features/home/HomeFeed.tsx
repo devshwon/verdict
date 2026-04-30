@@ -1,5 +1,5 @@
 import { Top } from "@toss/tds-mobile";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import {
   TODAY_CARD_CATEGORIES,
@@ -8,30 +8,72 @@ import {
   spacing,
   type CategoryKey,
 } from "../../design/tokens";
+import {
+  fetchFeedVotes,
+  fetchPastTodayVotes,
+  fetchTodayVote,
+  getDailyMissions,
+  type DailyMissions,
+} from "../../lib/db/votes";
 import { AdBanner } from "./components/AdBanner";
 import { CategoryTabs } from "./components/CategoryTabs";
 import { FeedCard } from "./components/FeedCard";
+import { MissionWidget } from "./components/MissionWidget";
 import { PastTodayCarousel } from "./components/PastTodayCarousel";
 import { TodayVoteCard } from "./components/TodayVoteCard";
-import { feedVotes, getRecentPastVotes, todayVotes } from "./mocks";
-import type { TodayVote } from "./types";
+import type { FeedVote, PastTodayVote, TodayVote } from "./types";
+
+type Status = "loading" | "ready" | "error";
 
 export function HomeFeed() {
   const [active, setActive] = useState<CategoryKey>("all");
+  const [status, setStatus] = useState<Status>("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [feed, setFeed] = useState<FeedVote[]>([]);
+  const [today, setToday] = useState<TodayVote | null>(null);
+  const [past, setPast] = useState<PastTodayVote[]>([]);
+  const [missions, setMissions] = useState<DailyMissions | null>(null);
 
-  const filteredFeed = useMemo(() => {
-    if (active === "all") return feedVotes;
-    return feedVotes.filter((v) => v.category === active);
-  }, [active]);
+  const load = useCallback(async (cat: CategoryKey) => {
+    setStatus("loading");
+    setError(null);
+    try {
+      const showsTodayCard =
+        cat !== "all" &&
+        cat !== "etc" &&
+        TODAY_CARD_CATEGORIES.includes(cat);
 
-  const todayVote: TodayVote | null =
-    active !== "all" &&
-    active !== "etc" &&
-    TODAY_CARD_CATEGORIES.includes(active)
-      ? todayVotes[active]
-      : null;
+      const [feedRes, todayRes, pastRes, missionsRes] = await Promise.all([
+        fetchFeedVotes(cat),
+        showsTodayCard
+          ? fetchTodayVote(cat as Exclude<CategoryKey, "all" | "etc">)
+          : Promise.resolve(null),
+        fetchPastTodayVotes(cat),
+        getDailyMissions().catch((e) => {
+          console.error("[HomeFeed] missions load failed:", e);
+          return null;
+        }),
+      ]);
+      setFeed(feedRes);
+      setToday(todayRes);
+      setPast(pastRes);
+      setMissions(missionsRes);
+      setStatus("ready");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[HomeFeed] load failed:", msg);
+      setError(msg);
+      setStatus("error");
+    }
+  }, []);
 
-  const carouselItems = getRecentPastVotes(active);
+  useEffect(() => {
+    void load(active);
+  }, [active, load]);
+
+  const handleCastSuccess = useCallback(() => {
+    void load(active);
+  }, [active, load]);
 
   return (
     <AppShell footer={<AdBanner />}>
@@ -46,22 +88,38 @@ export function HomeFeed() {
         }
       />
 
+      <MissionWidget missions={missions} />
+
       <CategoryTabs active={active} onChange={setActive} />
 
-      {todayVote ? <TodayVoteCard vote={todayVote} /> : null}
-
-      <PastTodayCarousel items={carouselItems} />
-
-      {filteredFeed.length === 0 ? (
-        <EmptyState />
+      {status === "loading" ? (
+        <FeedMessage>불러오는 중…</FeedMessage>
+      ) : status === "error" ? (
+        <FeedMessage>
+          불러오기에 실패했어요{error ? ` (${error})` : ""}
+        </FeedMessage>
       ) : (
-        filteredFeed.map((vote) => <FeedCard key={vote.id} vote={vote} />)
+        <>
+          {today ? <TodayVoteCard vote={today} /> : null}
+          <PastTodayCarousel items={past} />
+          {feed.length === 0 ? (
+            <FeedMessage>표시할 투표가 없어요.</FeedMessage>
+          ) : (
+            feed.map((vote) => (
+              <FeedCard
+                key={vote.id}
+                vote={vote}
+                onCastSuccess={handleCastSuccess}
+              />
+            ))
+          )}
+        </>
       )}
     </AppShell>
   );
 }
 
-function EmptyState() {
+function FeedMessage({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
@@ -72,7 +130,7 @@ function EmptyState() {
         fontSize: fontSize.body,
       }}
     >
-      표시할 투표가 없어요.
+      {children}
     </div>
   );
 }

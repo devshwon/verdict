@@ -5,9 +5,10 @@ type Props = {
   disabled: boolean;
   loading: boolean;
   onSubmit: () => void;
+  label?: string;
 };
 
-export function SubmitBar({ disabled, loading, onSubmit }: Props) {
+export function SubmitBar({ disabled, loading, onSubmit, label = "등록하기" }: Props) {
   return (
     <div
       style={{
@@ -25,7 +26,7 @@ export function SubmitBar({ disabled, loading, onSubmit }: Props) {
         loading={loading}
         onClick={onSubmit}
       >
-        등록하기
+        {label}
       </Button>
     </div>
   );

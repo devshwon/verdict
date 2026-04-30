@@ -1,10 +1,11 @@
-import { Toast } from "@toss/tds-mobile";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Toast } from "@toss/tds-mobile";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "../../components/AppShell";
 import { Pill } from "../../components/Pill";
 import { getShareUrl } from "../../config/share";
 import {
+  borderWidth,
   categories,
   categoryColors,
   fontSize,
@@ -12,8 +13,15 @@ import {
   lineHeight,
   motion,
   palette,
+  radius,
   spacing,
 } from "../../design/tokens";
+import {
+  castVote,
+  fetchVoteDetail,
+  registerAdWatch,
+  unlockVoteResults,
+} from "../../lib/db/votes";
 import { AdSlot } from "./components/AdSlot";
 import { DemographicGroup } from "./components/DemographicGroup";
 import { DetailHeader } from "./components/DetailHeader";
@@ -22,20 +30,28 @@ import { OverallResult } from "./components/OverallResult";
 import { ResultSkeleton } from "./components/ResultSkeleton";
 import { ShareRow } from "./components/ShareRow";
 import { VoteOptions } from "./components/VoteOptions";
-import { getVoteDetail } from "./mocks";
+import type { VoteDetail as VoteDetailType } from "./types";
 
-type Phase = "unvoted" | "submitting" | "result";
+type Phase =
+  | "loading"
+  | "missing"
+  | "unvoted"
+  | "submitting"
+  | "ad_gate"
+  | "watching_ad"
+  | "result";
 type ShareChannel = "kakao" | "instagram" | "url";
+
+// 임시 시뮬레이션 광고 — 실제 앱인토스 리워드 SDK 연동은 5번(TodayArchive)에서 처리
+const SIMULATED_AD_MS = 1500;
 
 export function VoteDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const detail = useMemo(() => getVoteDetail(id), [id]);
 
-  const [phase, setPhase] = useState<Phase>(() =>
-    detail?.isClosed ? "result" : "unvoted",
-  );
+  const [detail, setDetail] = useState<VoteDetailType | null>(null);
+  const [phase, setPhase] = useState<Phase>("loading");
   const [myOptionId, setMyOptionId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingChannel, setPendingChannel] = useState<ShareChannel | null>(
@@ -44,22 +60,60 @@ export function VoteDetail() {
 
   const submittingRef = useRef(false);
 
+  const load = useCallback(async () => {
+    if (!id) {
+      setPhase("missing");
+      return;
+    }
+    try {
+      const res = await fetchVoteDetail(id);
+      if (!res) {
+        setDetail(null);
+        setPhase("missing");
+        return;
+      }
+      setDetail(res.detail);
+      setMyOptionId(res.myOptionId);
+      if (!res.detail.isClosed && res.myOptionId === null) {
+        setPhase("unvoted");
+      } else if (res.myOptionId !== null || res.hasUnlock) {
+        setPhase("result");
+      } else {
+        // 마감 + 미참여 + 미언락 → 광고 게이트
+        setPhase("ad_gate");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[VoteDetail] load failed:", msg);
+      setToast(msg);
+      setPhase("missing");
+    }
+  }, [id]);
+
   useEffect(() => {
-    setPhase(detail?.isClosed ? "result" : "unvoted");
-    setMyOptionId(null);
     submittingRef.current = false;
-  }, [id, detail?.isClosed]);
+    void load();
+  }, [load]);
 
-  useEffect(() => {
-    if (phase !== "submitting") return;
-    const t = setTimeout(() => {
-      submittingRef.current = false;
-      setPhase("result");
-    }, motion.resultDelayMs);
-    return () => clearTimeout(t);
-  }, [phase]);
+  if (phase === "loading") {
+    return (
+      <AppShell hideBottomNav>
+        <DetailHeader onBack={() => navigate(-1)} />
+        <div
+          style={{
+            margin: `${spacing.xl}px ${spacing.lg}px`,
+            color: palette.textSecondary,
+            fontSize: fontSize.body,
+            textAlign: "center",
+          }}
+        >
+          불러오는 중…
+        </div>
+      </AppShell>
+    );
+  }
 
-  if (!detail) {
+  if (phase === "missing" || !detail) {
     return <NotFound onHome={() => navigate("/", { replace: true })} />;
   }
 
@@ -67,12 +121,50 @@ export function VoteDetail() {
   const categoryLabel =
     categories.find((c) => c.key === detail.category)?.label ?? "";
 
-  const handlePick = (optionId: string) => {
+  const handlePick = async (optionId: string) => {
     if (submittingRef.current) return;
     if (myOptionId !== null || phase !== "unvoted") return;
     submittingRef.current = true;
-    setMyOptionId(optionId);
     setPhase("submitting");
+    const result = await castVote(detail.id, optionId);
+    if (!result.ok) {
+      submittingRef.current = false;
+      setToast(result.message);
+      if (result.reason === "already_voted" || result.reason === "closed") {
+        await load();
+      } else {
+        setPhase("unvoted");
+      }
+      return;
+    }
+    setMyOptionId(optionId);
+    // 결과 연출: 짧은 딜레이 후 reload하여 최신 결과 반영
+    setTimeout(async () => {
+      await load();
+      submittingRef.current = false;
+    }, motion.resultDelayMs);
+  };
+
+  const handleWatchAd = async () => {
+    if (phase !== "ad_gate" || !detail) return;
+    setPhase("watching_ad");
+    try {
+      // TODO: 실제 앱인토스 리워드 광고 SDK 시청 콜백으로 대체
+      await new Promise((r) => setTimeout(r, SIMULATED_AD_MS));
+      const tokenOutcome = await registerAdWatch("unlock_vote_result");
+      if (!tokenOutcome.ok) {
+        setToast(tokenOutcome.message);
+        setPhase("ad_gate");
+        return;
+      }
+      await unlockVoteResults(detail.id, tokenOutcome.adToken);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[VoteDetail] unlock failed:", msg);
+      setToast("광고 시청에 실패했어요. 다시 시도해주세요");
+      setPhase("ad_gate");
+    }
   };
 
   const handleBack = () => {
@@ -160,6 +252,15 @@ export function VoteDetail() {
 
       {phase === "submitting" ? <ResultSkeleton accentBar={accent.bar} /> : null}
 
+      {phase === "ad_gate" || phase === "watching_ad" ? (
+        <AdGate
+          watching={phase === "watching_ad"}
+          onWatch={handleWatchAd}
+          onHome={() => navigate("/", { replace: true })}
+          accentBar={accent.bar}
+        />
+      ) : null}
+
       {phase === "result" ? (
         <>
           <OverallResult
@@ -199,5 +300,91 @@ export function VoteDetail() {
         />
       ) : null}
     </AppShell>
+  );
+}
+
+function AdGate({
+  watching,
+  onWatch,
+  onHome,
+  accentBar,
+}: {
+  watching: boolean;
+  onWatch: () => void;
+  onHome: () => void;
+  accentBar: string;
+}) {
+  return (
+    <section
+      style={{
+        margin: `${spacing.lg}px ${spacing.lg}px 0`,
+        padding: spacing.xl,
+        borderRadius: radius.lg,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
+        background: palette.surface,
+        display: "flex",
+        flexDirection: "column",
+        gap: spacing.md,
+        alignItems: "stretch",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: fontSize.title,
+          fontWeight: fontWeight.bold,
+          color: palette.textPrimary,
+          lineHeight: lineHeight.tight,
+        }}
+      >
+        투표가 종료됐어요
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: fontSize.body,
+          color: palette.textSecondary,
+          lineHeight: lineHeight.body,
+        }}
+      >
+        결과를 보려면 광고를 시청해주세요.
+      </p>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: spacing.sm,
+          marginTop: spacing.xs,
+        }}
+      >
+        <Button
+          size="medium"
+          variant="fill"
+          color="primary"
+          disabled={watching}
+          onClick={onWatch}
+        >
+          {watching ? "광고 시청 중…" : "광고 보고 결과 확인하기"}
+        </Button>
+        <Button
+          size="medium"
+          variant="weak"
+          color="dark"
+          disabled={watching}
+          onClick={onHome}
+        >
+          홈으로 돌아가기
+        </Button>
+      </div>
+      <span
+        aria-hidden
+        style={{
+          height: 2,
+          background: accentBar,
+          opacity: 0.15,
+          borderRadius: radius.sm,
+        }}
+      />
+    </section>
   );
 }

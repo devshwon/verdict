@@ -1,5 +1,5 @@
 import { Top } from "@toss/tds-mobile";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import {
   fontSize,
@@ -7,64 +7,89 @@ import {
   palette,
   spacing,
 } from "../../design/tokens";
-import { pastTodayVotes } from "../home/mocks";
+import { fetchPastTodayVotes } from "../../lib/db/votes";
 import type { PastTodayVote } from "../home/types";
 import { PastVoteCard } from "./components/PastVoteCard";
+
+const ARCHIVE_LIMIT = 200;
 
 const monthFormatter = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "long",
 });
 
-export function TodayArchive() {
-  const grouped = useMemo(() => groupByMonth(pastTodayVotes), []);
+type Status = "loading" | "ready" | "error";
 
-  if (grouped.length === 0) {
-    return (
-      <AppShell>
-        <ArchiveTop />
-        <Empty />
-      </AppShell>
-    );
-  }
+export function TodayArchive() {
+  const [status, setStatus] = useState<Status>("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [votes, setVotes] = useState<PastTodayVote[]>([]);
+
+  const load = useCallback(async () => {
+    setStatus("loading");
+    setError(null);
+    try {
+      const rows = await fetchPastTodayVotes("all", ARCHIVE_LIMIT);
+      setVotes(rows);
+      setStatus("ready");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[TodayArchive] load failed:", msg);
+      setError(msg);
+      setStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const grouped = useMemo(() => groupByMonth(votes), [votes]);
 
   return (
     <AppShell>
       <ArchiveTop />
-      {grouped.map(([month, items]) => (
-        <section
-          key={month}
-          style={{
-            margin: `${spacing.md}px ${spacing.lg}px`,
-            display: "flex",
-            flexDirection: "column",
-            gap: spacing.sm,
-          }}
-        >
-          <h2
+      {status === "loading" ? (
+        <Message>불러오는 중…</Message>
+      ) : status === "error" ? (
+        <Message>불러오기에 실패했어요{error ? ` (${error})` : ""}</Message>
+      ) : grouped.length === 0 ? (
+        <Empty />
+      ) : (
+        grouped.map(([month, items]) => (
+          <section
+            key={month}
             style={{
-              margin: 0,
-              fontSize: fontSize.subtitle,
-              fontWeight: fontWeight.bold,
-              color: palette.textPrimary,
-            }}
-          >
-            {formatMonthLabel(month)}
-          </h2>
-
-          <div
-            style={{
+              margin: `${spacing.md}px ${spacing.lg}px`,
               display: "flex",
               flexDirection: "column",
               gap: spacing.sm,
             }}
           >
-            {items.map((vote) => (
-              <PastVoteCard key={vote.id} vote={vote} variant="row" />
-            ))}
-          </div>
-        </section>
-      ))}
+            <h2
+              style={{
+                margin: 0,
+                fontSize: fontSize.subtitle,
+                fontWeight: fontWeight.bold,
+                color: palette.textPrimary,
+              }}
+            >
+              {formatMonthLabel(month)}
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: spacing.sm,
+              }}
+            >
+              {items.map((vote) => (
+                <PastVoteCard key={vote.id} vote={vote} variant="row" />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
     </AppShell>
   );
 }
@@ -83,6 +108,22 @@ function ArchiveTop() {
         </Top.SubtitleParagraph>
       }
     />
+  );
+}
+
+function Message({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        margin: `${spacing.xl}px ${spacing.lg}px`,
+        padding: spacing.xl,
+        textAlign: "center",
+        color: palette.textSecondary,
+        fontSize: fontSize.body,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 

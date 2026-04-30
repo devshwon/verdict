@@ -1,4 +1,4 @@
-import { Button } from "@toss/tds-mobile";
+import { Button, Toast } from "@toss/tds-mobile";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
@@ -12,17 +12,20 @@ import {
   fontWeight,
   layout,
   lineHeight,
+  motion,
   palette,
   radius,
   spacing,
 } from "../../../design/tokens";
+import { castVote } from "../../../lib/db/votes";
 import type { FeedVote, VoteOption } from "../types";
 
 type Props = {
   vote: FeedVote;
+  onCastSuccess?: () => void;
 };
 
-export function FeedCard({ vote }: Props) {
+export function FeedCard({ vote, onCastSuccess }: Props) {
   const navigate = useNavigate();
   const navigatingRef = useRef(false);
   const cat = categoryColors[vote.category];
@@ -33,6 +36,7 @@ export function FeedCard({ vote }: Props) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [voted, setVoted] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const goDetail = () => {
     if (navigatingRef.current) return;
@@ -55,11 +59,19 @@ export function FeedCard({ vote }: Props) {
       ? vote.options.find((o) => o.id === pendingId) ?? null
       : null;
 
-  const confirmVote = () => {
+  const confirmVote = async () => {
     if (confirming || voted || pendingId === null) return;
     setConfirming(true);
-    setVoted(true);
-    setPendingId(null);
+    const result = await castVote(vote.id, pendingId);
+    if (result.ok) {
+      setVoted(true);
+      setPendingId(null);
+      onCastSuccess?.();
+    } else {
+      setToast(result.message);
+      setPendingId(null);
+    }
+    setConfirming(false);
   };
 
   return (
@@ -226,6 +238,18 @@ export function FeedCard({ vote }: Props) {
           ) : null}
         </div>
       )}
+
+      {toast !== null ? (
+        <div onClick={stop}>
+          <Toast
+            position="bottom"
+            open
+            text={toast}
+            duration={motion.toastMs}
+            onClose={() => setToast(null)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
