@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { RouteFallback } from "./components/RouteFallback";
 import { AuthGate } from "./features/auth/AuthGate";
 import { HomeFeed } from "./features/home/HomeFeed";
+import { useTossBanner } from "./lib/ads";
 import { UnlockProvider } from "./features/today-archive/UnlockContext";
 import { UnlockErrorToast } from "./features/today-archive/UnlockErrorToast";
 import "./App.css";
@@ -30,6 +31,8 @@ const NotFound = lazy(() =>
 );
 
 function App() {
+  useTossBanner();
+
   return (
     <AuthGate>
       <UnlockProvider>
