@@ -37,7 +37,8 @@ export function DailyMissionCard({ missions }: Props) {
           gap: spacing.sm,
         }}
       >
-        <Row label="일반 투표 참여" mission={missions.normalVoteParticipation} />
+        <AttendanceRow attendance={missions.attendance} />
+        <Row label="일반 투표 참여 (5건)" mission={missions.normalVoteParticipation} />
         <Row label="일반 투표 등록" mission={missions.normalVoteRegister} />
         <Row
           label="오늘의 투표 후보 신청"
@@ -45,6 +46,51 @@ export function DailyMissionCard({ missions }: Props) {
         />
       </div>
     </section>
+  );
+}
+
+function AttendanceRow({
+  attendance,
+}: {
+  attendance: DailyMissions["attendance"];
+}) {
+  const { attendedToday, currentStreak, nextBonusDay } = attendance;
+  const daysToBonus = Math.max(0, nextBonusDay - currentStreak);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: spacing.sm,
+        padding: `${spacing.xs}px 0`,
+      }}
+    >
+      <span aria-hidden style={{ fontSize: fontSize.body }}>
+        {attendedToday ? "✅" : "🔵"}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontSize: fontSize.label,
+          fontWeight: fontWeight.medium,
+          color: palette.textPrimary,
+        }}
+      >
+        출석 (연속 {currentStreak}일
+        {daysToBonus > 0 ? ` · ${daysToBonus}일 후 보너스` : ""})
+      </span>
+      <span
+        style={{
+          fontSize: fontSize.small,
+          color: attendedToday ? palette.textTertiary : palette.brandText,
+          fontWeight: fontWeight.medium,
+          minWidth: 40,
+          textAlign: "right",
+        }}
+      >
+        +1P
+      </span>
+    </div>
   );
 }
 

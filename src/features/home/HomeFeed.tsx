@@ -13,10 +13,13 @@ import {
   fetchPastTodayVotes,
   fetchTodayVote,
   getDailyMissions,
+  getUnclaimedPoints,
   type DailyMissions,
+  type UnclaimedPoint,
 } from "../../lib/db/votes";
 import { AdBanner } from "./components/AdBanner";
 import { CategoryTabs } from "./components/CategoryTabs";
+import { ClaimRewardsBanner } from "./components/ClaimRewardsBanner";
 import { FeedCard } from "./components/FeedCard";
 import { MissionWidget } from "./components/MissionWidget";
 import { PastTodayCarousel } from "./components/PastTodayCarousel";
@@ -65,6 +68,7 @@ export function HomeFeed() {
   const [today, setToday] = useState<TodayVote | null>(null);
   const [past, setPast] = useState<PastTodayVote[]>([]);
   const [missions, setMissions] = useState<DailyMissions | null>(null);
+  const [unclaimed, setUnclaimed] = useState<UnclaimedPoint[]>([]);
 
   const mainRef = useRef<HTMLElement>(null);
   const firstMountRef = useRef(true);
@@ -72,11 +76,21 @@ export function HomeFeed() {
   const writeScrollRafRef = useRef<number | null>(null);
   const missionDateRef = useRef<string>(kstDateString());
 
+  const refreshUnclaimed = useCallback(async () => {
+    try {
+      const list = await getUnclaimedPoints();
+      setUnclaimed(list);
+    } catch (e) {
+      console.error("[HomeFeed] unclaimed load failed:", e);
+    }
+  }, []);
+
   const refreshMissions = useCallback(async () => {
     try {
       const m = await getDailyMissions();
       setMissions(m);
       missionDateRef.current = kstDateString();
+      void refreshUnclaimed();
     } catch (e) {
       console.error("[HomeFeed] missions refresh failed:", e);
     }
@@ -211,6 +225,11 @@ export function HomeFeed() {
             대중의 평균값이 궁금할 때
           </Top.SubtitleParagraph>
         }
+      />
+
+      <ClaimRewardsBanner
+        rewards={unclaimed}
+        onClaimed={() => void refreshUnclaimed()}
       />
 
       <MissionWidget missions={missions} />

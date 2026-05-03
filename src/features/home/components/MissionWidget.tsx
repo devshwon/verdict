@@ -18,10 +18,11 @@ export function MissionWidget({ missions }: Props) {
   if (!missions) return null;
 
   const completed =
+    (missions.attendance.attendedToday ? 1 : 0) +
     (missions.normalVoteParticipation.completed ? 1 : 0) +
     (missions.normalVoteRegister.completed ? 1 : 0) +
     (missions.todayCandidateRegister.completed ? 1 : 0);
-  const total = 3;
+  const total = 4;
 
   return (
     <button

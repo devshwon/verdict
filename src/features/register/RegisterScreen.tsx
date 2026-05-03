@@ -22,7 +22,7 @@ export function RegisterScreen() {
   const [toast, setToast] = useState<string | null>(null);
 
   const form = useRegisterForm({
-    onSuccess: (_voteId, payload, kind, rejectionReason) => {
+    onSuccess: (_voteId, payload, kind, rejectionReason, adUsedAtRegister) => {
       if (kind === "approved") {
         setToast(
           payload.todayCandidate
@@ -31,11 +31,11 @@ export function RegisterScreen() {
         );
         setTimeout(() => navigate("/"), motion.toastMs);
       } else if (kind === "rejected") {
-        setToast(
-          rejectionReason
-            ? `등록 반려: ${rejectionReason}`
-            : "검열 기준에 맞지 않아 반려됐어요",
-        );
+        const base = rejectionReason
+          ? `등록 반려: ${rejectionReason}`
+          : "검열 기준에 맞지 않아 반려됐어요";
+        // 광고 시청 후 LLM 반려 → 무료이용권 1개 환급 (서버에서 일일 캡 2개 자동 적용)
+        setToast(adUsedAtRegister ? `${base} (무료이용권 1개 환급)` : base);
       } else {
         // moderation 호출 자체가 실패 — 등록은 됐으나 검열 결과 미수신
         setToast(

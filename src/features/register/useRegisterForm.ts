@@ -62,6 +62,7 @@ type Options = {
     payload: RegisterPayload,
     kind: RegisterSuccessKind,
     rejectionReason?: string | null,
+    adUsedAtRegister?: boolean,
   ) => void;
   onError?: (outcome: Extract<RegisterOutcome, { ok: false }>) => void;
 };
@@ -273,7 +274,7 @@ export function useRegisterForm(options: Options = {}) {
           kind = moderation.approved ? "approved" : "rejected";
           rejectionReason = moderation.rejectionReason;
         }
-        onSuccess?.(outcome.voteId, payload, kind, rejectionReason);
+        onSuccess?.(outcome.voteId, payload, kind, rejectionReason, adUsed);
         resetForm();
         setForceAdMode(false);
         await refreshStatus();

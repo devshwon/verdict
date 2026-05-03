@@ -621,6 +621,7 @@ export type RegisterOutcome =
         | "ad_required"
         | "ad_token_invalid"
         | "free_pass_unavailable"
+        | "rejection_cap_reached"
         | "unknown";
       message: string;
     };
@@ -700,6 +701,13 @@ export async function registerVote(input: RegisterInput): Promise<RegisterOutcom
       message: "광고 시청이 만료됐어요. 다시 시도해주세요",
     };
   }
+  if (error.code === "P0008") {
+    return {
+      ok: false,
+      reason: "rejection_cap_reached",
+      message: "오늘 반려된 등록이 너무 많아요. 내일 다시 시도해주세요",
+    };
+  }
   return {
     ok: false,
     reason: "unknown",
@@ -764,10 +772,17 @@ export type MissionProgress = {
   rewardPoints: number;
 };
 
+export type AttendanceProgress = {
+  attendedToday: boolean;
+  currentStreak: number;
+  nextBonusDay: number;
+};
+
 export type DailyMissions = {
   normalVoteParticipation: MissionProgress;
   normalVoteRegister: MissionProgress;
   todayCandidateRegister: MissionProgress;
+  attendance: AttendanceProgress;
   freePassBalance: number;
   adClaimedToday: boolean;
 };
@@ -779,10 +794,17 @@ type MissionRpcRow = {
   reward_points: number;
 };
 
+type AttendanceRpcRow = {
+  attended_today: boolean;
+  current_streak: number;
+  next_bonus_day: number;
+};
+
 type MissionsRpcResult = {
   normal_vote_participation: MissionRpcRow;
   normal_vote_register: MissionRpcRow;
   today_candidate_register: MissionRpcRow;
+  attendance: AttendanceRpcRow;
   free_pass_balance: number;
   ad_claimed_today: boolean;
 };
@@ -804,6 +826,11 @@ export async function getDailyMissions(): Promise<DailyMissions> {
     normalVoteParticipation: toMission(r.normal_vote_participation),
     normalVoteRegister: toMission(r.normal_vote_register),
     todayCandidateRegister: toMission(r.today_candidate_register),
+    attendance: {
+      attendedToday: r.attendance.attended_today,
+      currentStreak: r.attendance.current_streak,
+      nextBonusDay: r.attendance.next_bonus_day,
+    },
     freePassBalance: r.free_pass_balance,
     adClaimedToday: r.ad_claimed_today,
   };
@@ -847,5 +874,63 @@ export async function claimDailyAdFreePass(
     ok: false,
     reason: "unknown",
     message: error.message ?? "무료이용권 받기에 실패했어요",
+  };
+}
+
+// ============================================================================
+// 하이브리드 수령 시스템 — 미수령 보상 조회 / 수령
+// ============================================================================
+
+export type UnclaimedPoint = {
+  id: string;
+  trigger: string;
+  amount: number;
+  relatedVoteId: string | null;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export async function getUnclaimedPoints(): Promise<UnclaimedPoint[]> {
+  const { data, error } = await supabase.rpc("get_unclaimed_points");
+  if (error) throw error;
+  type Row = {
+    id: string;
+    trigger: string;
+    amount: number;
+    related_vote_id: string | null;
+    created_at: string;
+    expires_at: string;
+  };
+  return ((data ?? []) as Row[]).map((r) => ({
+    id: r.id,
+    trigger: r.trigger,
+    amount: r.amount,
+    relatedVoteId: r.related_vote_id,
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+  }));
+}
+
+export async function claimPoints(logIds: string[]): Promise<number> {
+  if (logIds.length === 0) return 0;
+  const { data, error } = await supabase.rpc("claim_points", {
+    p_log_ids: logIds,
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
+
+export async function claimAllUnclaimedPoints(): Promise<{
+  claimedCount: number;
+  totalAmount: number;
+}> {
+  const { data, error } = await supabase.rpc("claim_all_unclaimed_points");
+  if (error) throw error;
+  const row = (data ?? [])[0] as
+    | { claimed_count: number; total_amount: number }
+    | undefined;
+  return {
+    claimedCount: row?.claimed_count ?? 0,
+    totalAmount: row?.total_amount ?? 0,
   };
 }

@@ -295,27 +295,12 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
 export async function updateDemographicsVisibility(
   next: { genderPublic?: boolean; agePublic?: boolean }
 ): Promise<void> {
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
-  if (!user) throw new Error("auth required");
-
-  const update: Record<string, unknown> = {};
-  if (typeof next.genderPublic === "boolean") {
-    update.gender_public = next.genderPublic;
-  }
-  if (typeof next.agePublic === "boolean") {
-    update.age_public = next.agePublic;
-  }
-  // 토글 OFF면 즉시 'undisclosed'로 덮어 v_vote_results 집계에서 제외
-  // (다음 토스 sync에서 ON으로 다시 토글하면 재 동기화됨)
-  if (next.genderPublic === false) update.gender = "undisclosed";
-  if (next.agePublic === false) update.age_bucket = "undisclosed";
-
-  if (Object.keys(update).length === 0) return;
-
-  const { error } = await supabase
-    .from("users")
-    .update(update)
-    .eq("id", user.id);
+  // *_public 플래그만 RPC로 전달. effective gender/age_bucket은
+  // DB 트리거(fn_users_sync_effective_demographics)가 raw + flag로 자동 재계산
+  // → 토글 OFF 후 다시 ON 해도 raw 값이 보존되어 즉시 복원됨
+  const { error } = await supabase.rpc("update_demographics_visibility", {
+    p_gender_public: next.genderPublic ?? null,
+    p_age_public: next.agePublic ?? null,
+  });
   if (error) throw error;
 }

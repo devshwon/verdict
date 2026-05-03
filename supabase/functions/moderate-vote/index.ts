@@ -4,10 +4,11 @@
 //   1) 클라이언트가 register_vote RPC로 투표 등록 → status='pending_review' + vote_id 반환
 //   2) 클라이언트가 이 함수에 vote_id 전달
 //   3) 함수가 service_role로 vote + options 조회 + 최근 30일 같은 카테고리 sample 조회 (중복 검사)
-//   4) OpenAI Chat Completions 호출 (gpt-4o-mini + JSON 모드)
-//   5) service_role로 votes UPDATE (status, ai_score, rejection_reason)
-//   6) 반려 시 등록 시점 적립된 보상 회수 (§S8)
-//   7) 클라이언트에 결과 반환
+//   4) **사전 휴리스틱**: 명백한 도배(짧은/반복 문자) → OpenAI 호출 없이 즉시 반려
+//   5) **호출 캡 체크**: fn_check_moderation_call (user당 일일 20회 한도 — cost 안전망)
+//   6) OpenAI Chat Completions 호출 (gpt-4o-mini + JSON 모드)
+//   7) service_role로 votes UPDATE (status, ai_score, rejection_reason)
+//   8) fn_record_moderation_result 호출 — approved 시 보상 적립, rejected 시 카운터 증가/연속3회 정지
 //
 // 환경변수 필요:
 //   - OPENAI_API_KEY (Supabase secret)
@@ -16,6 +17,12 @@
 // 비용 (1건당, sample 10개 기준):
 //   - 입력 ~800 tokens, 출력 ~80 tokens
 //   - gpt-4o-mini: ₩0.24 / 건 (입력 $0.15 / 출력 $0.60 per 1M tokens)
+//
+// 어뷰징 방어 다중 레이어:
+//   - register_vote RPC: 일일 반려 5회 도달 시 P0008로 등록 자체 차단 (OpenAI 호출 안 됨)
+//   - register_vote RPC: 연속 반려 3회 시 1시간 등록 정지
+//   - 본 함수: 사전 휴리스틱(저비용 1차 필터) + 일일 검열 호출 캡(20회 하드 천장)
+//   - 보상 적립은 검열 통과 시점에만 발생 → 반려 어뷰징 동기 제거
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -24,9 +31,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
 // 기획서 §10 — gpt-4o-mini로 검열 (한국어 분류 + JSON 출력에 충분, 비용 효율 최대)
-// 정확도 이슈 발생 시 'gpt-4o' 또는 다른 모델로 교체
 const OPENAI_MODEL = 'gpt-4o-mini'
 const SIMILARITY_SAMPLE_LIMIT = 10
+const DAILY_MODERATION_CALL_CAP = 20
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -52,13 +59,39 @@ interface VoteRow {
   author_id: string
   question: string
   category: string
-  type: string
+  type: 'normal' | 'today_candidate' | 'today'
   status: string
+  created_at: string
 }
 
 interface OptionRow {
   option_text: string
   display_order: number
+}
+
+// 사전 휴리스틱 (OpenAI 호출 전 1차 필터, 비용 0)
+//   - 길이 부족 / 의미 없는 반복 문자 / 자기 동일 질문 도배 같은 명백한 케이스 컷
+function preScreen(question: string, options: string[]): string | null {
+  const q = question.trim()
+  if (q.length < 4) return '질문이 너무 짧아요'
+
+  // 같은 문자 반복 50% 초과 (예: "ㅋㅋㅋㅋㅋㅋㅋㅋ", "ㅁㄴㅇㄹㅁㄴㅇㄹ")
+  const charCount = new Map<string, number>()
+  for (const ch of q.replace(/\s/g, '')) {
+    charCount.set(ch, (charCount.get(ch) ?? 0) + 1)
+  }
+  const total = [...charCount.values()].reduce((s, n) => s + n, 0)
+  const maxCount = Math.max(...charCount.values())
+  if (total >= 4 && maxCount / total > 0.6) {
+    return '의미 없는 반복 문자가 포함돼 있어요'
+  }
+
+  // 선택지 중복
+  const opts = options.map((o) => o.trim().toLowerCase())
+  if (new Set(opts).size !== opts.length) {
+    return '선택지에 중복이 있어요'
+  }
+  return null
 }
 
 async function callOpenAI(
@@ -68,7 +101,6 @@ async function callOpenAI(
   recentSample: string[],
 ): Promise<ModerationResult> {
   if (!OPENAI_API_KEY) {
-    // 키 미설정 시 fallback: 통과 처리 + ai_score 5.0 (운영 시작 전 안전장치)
     console.warn('[moderate-vote] OPENAI_API_KEY not set, falling back to approve')
     return { approved: true, ai_score: 5.0, rejection_reason: null }
   }
@@ -107,7 +139,6 @@ async function callOpenAI(
     body: JSON.stringify({
       model: OPENAI_MODEL,
       max_tokens: 256,
-      // JSON 모드 강제 — 응답이 항상 valid JSON 단일 객체로 보장
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
@@ -129,7 +160,6 @@ async function callOpenAI(
     throw new Error('OpenAI response empty')
   }
 
-  // JSON 모드 강제이므로 직접 파싱 (markdown 블록 추출 불필요)
   const parsed = JSON.parse(text) as {
     approved?: boolean
     ai_score?: number | null
@@ -150,6 +180,35 @@ async function callOpenAI(
 function clampScore(s: unknown): number | null {
   if (typeof s !== 'number' || !isFinite(s)) return null
   return Math.max(0, Math.min(10, s))
+}
+
+// 등록 시점에 1~2건째였는지 판정 — 보상 eligibility 결정
+//   normal: 같은 user의 같은 KST 자정 이후 normal vote 중 created_at < this의 row 개수 < 2
+//   today_candidate: 같은 user의 같은 KST 자정 이후 today_candidate 중 created_at < this의 row 개수 < 1 (= 첫 건)
+async function deriveRewardEligibility(
+  admin: ReturnType<typeof createClient>,
+  vote: VoteRow,
+): Promise<boolean> {
+  if (vote.type !== 'normal' && vote.type !== 'today_candidate') return false
+
+  const created = new Date(vote.created_at)
+  // KST 자정 ISO
+  const kstMidnight = new Date(
+    new Date(created.toLocaleString('en-US', { timeZone: 'Asia/Seoul' })).setHours(0, 0, 0, 0),
+  ).toISOString()
+
+  const { count, error } = await admin
+    .from('votes')
+    .select('id', { count: 'exact', head: true })
+    .eq('author_id', vote.author_id)
+    .eq('type', vote.type)
+    .neq('id', vote.id)
+    .gte('created_at', kstMidnight)
+    .lt('created_at', vote.created_at)
+  if (error) throw error
+
+  if (vote.type === 'normal') return (count ?? 0) < 2
+  return (count ?? 0) < 1
 }
 
 Deno.serve(async (req) => {
@@ -176,10 +235,9 @@ Deno.serve(async (req) => {
   })
 
   try {
-    // 1) vote 조회 + status 검증 (이미 검열 끝난 vote는 재검열 안 함)
     const { data: voteRow, error: voteErr } = await admin
       .from('votes')
-      .select('id, author_id, question, category, type, status')
+      .select('id, author_id, question, category, type, status, created_at')
       .eq('id', voteId)
       .single()
     if (voteErr) throw voteErr
@@ -193,7 +251,6 @@ Deno.serve(async (req) => {
       }))
     }
 
-    // 2) options 조회
     const { data: optionRows, error: optErr } = await admin
       .from('vote_options')
       .select('option_text, display_order')
@@ -202,7 +259,79 @@ Deno.serve(async (req) => {
     if (optErr) throw optErr
     const options = ((optionRows ?? []) as OptionRow[]).map((o) => o.option_text)
 
-    // 3) 최근 30일 동일 카테고리 sample 조회 (유사도 비교용)
+    // ── 사전 휴리스틱 (저비용 1차 필터) ─────────────────────────
+    const preScreenReason = preScreen(vote.question, options)
+    if (preScreenReason !== null) {
+      const eligible = await deriveRewardEligibility(admin, vote)
+      const { error: updErr } = await admin
+        .from('votes')
+        .update({
+          status: 'blinded',
+          ai_score: null,
+          rejection_reason: preScreenReason,
+        })
+        .eq('id', voteId)
+        .eq('status', 'pending_review')
+      if (updErr) throw updErr
+
+      const { error: recErr } = await admin.rpc('fn_record_moderation_result', {
+        p_vote_id: voteId,
+        p_user_id: vote.author_id,
+        p_vote_type: vote.type,
+        p_eligible_for_register_reward: eligible,
+        p_approved: false,
+        p_rejection_source: 'prescreen',
+      })
+      if (recErr) console.error('[moderate-vote] record (pre-screen) failed:', recErr.message)
+
+      return withCors(Response.json({
+        ok: true,
+        approved: false,
+        ai_score: null,
+        rejection_reason: preScreenReason,
+        status: 'blinded',
+      }))
+    }
+
+    // ── 일일 검열 호출 캡 체크 (cost 안전망) ───────────────────
+    const { data: callOk, error: callErr } = await admin.rpc('fn_check_moderation_call', {
+      p_user_id: vote.author_id,
+      p_daily_cap: DAILY_MODERATION_CALL_CAP,
+    })
+    if (callErr) throw callErr
+    if (callOk !== true) {
+      // 호출 캡 도달 → OpenAI 호출 없이 자동 반려
+      const { error: updErr } = await admin
+        .from('votes')
+        .update({
+          status: 'blinded',
+          rejection_reason: '오늘 검열 한도를 초과했어요. 내일 다시 시도해주세요',
+        })
+        .eq('id', voteId)
+        .eq('status', 'pending_review')
+      if (updErr) throw updErr
+
+      // call_cap 시스템 한도라 카운터/정지/환급 모두 적용 안 함 (사용자 책임 아님)
+      const { error: recErr } = await admin.rpc('fn_record_moderation_result', {
+        p_vote_id: voteId,
+        p_user_id: vote.author_id,
+        p_vote_type: vote.type,
+        p_eligible_for_register_reward: false,
+        p_approved: false,
+        p_rejection_source: 'call_cap',
+      })
+      if (recErr) console.error('[moderate-vote] record (call_cap) failed:', recErr.message)
+
+      return withCors(Response.json({
+        ok: true,
+        approved: false,
+        ai_score: null,
+        rejection_reason: '오늘 검열 한도를 초과했어요. 내일 다시 시도해주세요',
+        status: 'blinded',
+      }))
+    }
+
+    // ── 최근 30일 동일 카테고리 sample 조회 ─────────────────────
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const { data: recentRows, error: recentErr } = await admin
       .from('votes')
@@ -216,10 +345,10 @@ Deno.serve(async (req) => {
     if (recentErr) throw recentErr
     const recentSample = ((recentRows ?? []) as { question: string }[]).map((r) => r.question)
 
-    // 4) LLM 검열 (OpenAI gpt-4o-mini)
+    // ── LLM 검열 (OpenAI gpt-4o-mini) ──────────────────────────
     const result = await callOpenAI(vote.question, options, vote.category, recentSample)
 
-    // 5) votes UPDATE
+    // ── votes UPDATE ────────────────────────────────────────────
     const newStatus = result.approved ? 'active' : 'blinded'
     const { error: updErr } = await admin
       .from('votes')
@@ -229,23 +358,22 @@ Deno.serve(async (req) => {
         rejection_reason: result.rejection_reason,
       })
       .eq('id', voteId)
-      .eq('status', 'pending_review')   // race 방어
+      .eq('status', 'pending_review')
     if (updErr) throw updErr
 
-    // 6) 반려 시 등록 시점 적립된 보상 회수 (백로그 §S8)
-    //    pending 상태인 normal_vote_register / today_candidate_register만 차단
-    //    이미 토스 지급 완료(completed)된 row는 건드리지 않음 — 정책상 회수 불가
-    if (!result.approved) {
-      const { error: blockErr } = await admin
-        .from('points_log')
-        .update({ status: 'blocked' })
-        .eq('related_vote_id', voteId)
-        .eq('status', 'pending')
-        .in('trigger', ['normal_vote_register', 'today_candidate_register'])
-      if (blockErr) {
-        console.error('[moderate-vote] points block failed:', blockErr.message)
-        // 보상 회수 실패는 검열 결과 반환을 막지 않음 (운영자 수동 회수 가능)
-      }
+    // ── 결과 기록: approved 시 보상 적립 / rejected 시 카운터 증가 + 광고 보호 환급 ──
+    const eligible = result.approved ? await deriveRewardEligibility(admin, vote) : false
+    const { error: recErr } = await admin.rpc('fn_record_moderation_result', {
+      p_vote_id: voteId,
+      p_user_id: vote.author_id,
+      p_vote_type: vote.type,
+      p_eligible_for_register_reward: eligible,
+      p_approved: result.approved,
+      p_rejection_source: result.approved ? null : 'llm',
+    })
+    if (recErr) {
+      console.error('[moderate-vote] record_moderation_result failed:', recErr.message)
+      // 결과 기록 실패는 검열 결과 반환을 막지 않음 (운영자 수동 보정)
     }
 
     return withCors(Response.json({

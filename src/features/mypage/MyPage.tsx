@@ -8,7 +8,13 @@ import {
   spacing,
 } from "../../design/tokens";
 import { fetchMyPageData, type MyPageData } from "../../lib/db/mypage";
-import { getDailyMissions, type DailyMissions } from "../../lib/db/votes";
+import {
+  getDailyMissions,
+  getUnclaimedPoints,
+  type DailyMissions,
+  type UnclaimedPoint,
+} from "../../lib/db/votes";
+import { ClaimRewardsCard } from "./components/ClaimRewardsCard";
 import { DailyMissionCard } from "./components/DailyMissionCard";
 import { DemographicsCard } from "./components/DemographicsCard";
 import { FreePassCard } from "./components/FreePassCard";
@@ -24,21 +30,27 @@ export function MyPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MyPageData | null>(null);
   const [missions, setMissions] = useState<DailyMissions | null>(null);
+  const [unclaimed, setUnclaimed] = useState<UnclaimedPoint[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setStatus("loading");
     setError(null);
     try {
-      const [pageData, missionsData] = await Promise.all([
+      const [pageData, missionsData, unclaimedData] = await Promise.all([
         fetchMyPageData(),
         getDailyMissions().catch((e) => {
           console.error("[MyPage] missions load failed:", e);
           return null;
         }),
+        getUnclaimedPoints().catch((e) => {
+          console.error("[MyPage] unclaimed load failed:", e);
+          return [];
+        }),
       ]);
       setData(pageData);
       setMissions(missionsData);
+      setUnclaimed(unclaimedData);
       setStatus("ready");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -73,6 +85,16 @@ export function MyPage() {
         <>
           <ProfileHeader profile={data.profile} />
           <StatGrid stats={data.stats} />
+          <ClaimRewardsCard
+            rewards={unclaimed}
+            onClaimed={(count, totalAmount) => {
+              if (count > 0) {
+                setToast(`${totalAmount}P 받기 신청 완료!`);
+                void load();
+              }
+            }}
+            onError={(msg) => setToast(msg)}
+          />
           {missions ? <DailyMissionCard missions={missions} /> : null}
           {missions ? (
             <FreePassCard

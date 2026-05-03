@@ -147,7 +147,7 @@ where id = '<운영자 user_id>';
 - [ ] 5분 경과 토큰 → 거부
 
 ### 8-3. 토스포인트 지급 (S3)
-- [ ] 등록 후 `points_log.status = 'pending'` 적립 확인
+- [ ] 등록 후 검열 통과 시점에 `points_log.status = 'pending'` 적립 (반려/사전휴리스틱 컷 시 미적립)
 - [ ] cron 5분 후 `status = 'completed'` + `toss_transaction_id` 기록
 - [ ] 일일 합산 한도 초과 시 `status = 'blocked'`
 - [ ] 신규 가입자 24h 지연 — `created_at < now() - 24h` 행만 처리되는지
@@ -158,9 +158,12 @@ where id = '<운영자 user_id>';
 - [ ] 등록 7일 경과 미선정 today_candidate → 자동 삭제
 - [ ] `points_log.related_vote_id` → `set null` 동작 확인
 
-### 8-5. 검열 반려 보상 회수 (S8)
-- [ ] 반려 케이스로 등록 → `points_log` 본 vote의 `normal_vote_register` 행이 `status = 'blocked'`
-- [ ] 이미 `completed`된 행은 그대로 (회수 불가 정책)
+### 8-5. 검열 반려 어뷰징 방어 (`20260504000003`)
+- [ ] 반려 케이스로 등록 → `points_log`에 `normal_vote_register` / `today_candidate_register` 행이 **생성되지 않음** (검열 통과 시점에만 적립)
+- [ ] 같은 user 일일 5회 반려 후 등록 시도 → `P0008` 차단 (OpenAI 호출 발생 안 함)
+- [ ] 연속 3회 반려 → `users.register_blocked_until = now() + 1h` 자동 설정 후 등록 시 `P0003`
+- [ ] 같은 user 일일 검열 호출 20회 도달 → 21건째는 OpenAI 호출 없이 자동 반려 (rejection_reason: "오늘 검열 한도를 초과했어요...")
+- [ ] 사전 휴리스틱(짧은 질문/반복 문자/선택지 중복) → OpenAI 호출 없이 즉시 반려
 
 ---
 
