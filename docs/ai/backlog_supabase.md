@@ -105,7 +105,7 @@
 - [x] 카테고리 분류 헬퍼 (`fn_points_category` — `normal_*`/`streak_*` → 1, `today_selection`/`100_participants` → 2)
 - [ ] **운영자 적용 작업**:
   - `supabase functions deploy payout-points`
-  - `TOSS_BIZWALLET_API_KEY` (+선택 `TOSS_BIZWALLET_BASE_URL`, mTLS 인증서) Supabase secret 설정
+  - 🚨 **실서비스 출시 전 필수** — `TOSS_BIZWALLET_API_KEY` + `TOSS_BIZWALLET_BASE_URL` Supabase secret 설정. 베타 단계는 미설정 OK (`payout-points/index.ts:52` 안전 가드가 자동 시뮬레이션). 토스 비즈월렛 키 발급되는 즉시 등록 — `deployment-checklist.md` §🚨 항목으로 트래킹
   - 마이그레이션 §6의 pg_cron 잡 등록 SQL 실행 (URL/SERVICE_ROLE_KEY 치환)
 - [ ] 토스 비즈월렛 약관 + 광고 SDK 약관 교차 확인
 - [ ] 실패 재시도 정책 — 현재는 `failed`로 마킹만 (재시도 안 함). 운영자 수동 검토 후 SQL로 `pending` 복원

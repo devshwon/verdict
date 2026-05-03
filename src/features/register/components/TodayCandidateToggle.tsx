@@ -49,8 +49,8 @@ export function TodayCandidateToggle({ checked, onChange }: Props) {
             }}
           >
             {checked
-              ? "선정 시 카테고리 상단 고정 노출 + 포인트 보상이 지급돼요."
-              : "심사를 거쳐 선정되면 상단에 고정 노출돼요."}
+              ? "오늘 등록된 후보 중 선정된 1건이 다음날 오전 8시에 공개돼요. 선정 시 +30P 추가 지급."
+              : "오늘 등록된 후보 중 심사를 거쳐 선정된 1건이 다음날 오전 8시에 공개돼요."}
           </div>
         </div>
         <Switch checked={checked} onChange={(_, next) => onChange(next)} />

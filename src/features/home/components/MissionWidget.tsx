@@ -32,7 +32,7 @@ export function MissionWidget({ missions }: Props) {
         alignItems: "center",
         justifyContent: "space-between",
         width: `calc(100% - ${spacing.lg * 2}px)`,
-        margin: `${spacing.sm}px ${spacing.lg}px ${spacing.xs}px`,
+        margin: `-${spacing.sm}px ${spacing.lg}px ${spacing.xs}px`,
         padding: `${spacing.sm}px ${spacing.md}px`,
         borderRadius: radius.md,
         border: `${borderWidth.hairline}px solid ${palette.border}`,

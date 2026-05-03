@@ -1,5 +1,7 @@
 import { Button } from "@toss/tds-mobile";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { UnlockConfirmDialog } from "../../../components/UnlockConfirmDialog";
 import {
   LOCKED_QUESTION_MASK,
   blur,
@@ -26,7 +28,8 @@ type Props = {
 
 export function PastVoteCard({ vote, variant }: Props) {
   const navigate = useNavigate();
-  const { isUnlocked, isPending, unlock } = useUnlock();
+  const { isUnlocked, isPending, unlock, freePassBalance } = useUnlock();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   // 두 소스 합집합: 서버 fetch(vote.unlocked) ∪ 이번 세션 unlock(isUnlocked).
   // 마운트 직후 UnlockProvider hydrate 전 짧은 윈도우에 vote.unlocked로 즉시 반영.
   const unlocked = isUnlocked(vote.id) || vote.unlocked;
@@ -38,6 +41,10 @@ export function PastVoteCard({ vote, variant }: Props) {
   const goDetail = () => navigate(`/vote/${vote.id}`);
   const handleUnlock = () => {
     if (pending || unlocked) return;
+    if (freePassBalance > 0) {
+      setConfirmOpen(true);
+      return;
+    }
     void unlock(vote.id);
   };
 
@@ -132,9 +139,21 @@ export function PastVoteCard({ vote, variant }: Props) {
             else handleUnlock();
           }}
         >
-          {unlocked ? "결과 보기" : "광고 보고 열기"}
+          {unlocked
+            ? "결과 보기"
+            : freePassBalance > 0
+              ? "결과 열기"
+              : "광고 보고 열기"}
         </Button>
       </div>
+
+      <UnlockConfirmDialog
+        open={confirmOpen}
+        freePassBalance={freePassBalance}
+        onUseFreePass={() => unlock(vote.id)}
+        onWatchAd={() => unlock(vote.id, { forceAd: true })}
+        onClose={() => setConfirmOpen(false)}
+      />
     </article>
   );
 }

@@ -6,12 +6,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { watchRewardAd } from "../../lib/ads";
 import {
   fetchAllUserUnlocks,
+  getDailyMissions,
   registerAdWatch,
   unlockVoteResults,
 } from "../../lib/db/votes";
-import { UnlockContext, type WatchAd } from "./unlockContextValue";
+import {
+  UnlockContext,
+  type UnlockOptions,
+  type WatchAd,
+} from "./unlockContextValue";
 
 const AD_TIMEOUT_MS = 15_000;
 
@@ -31,10 +37,20 @@ export function UnlockProvider({
   );
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [lastError, setLastError] = useState<string | null>(null);
+  const [freePassBalance, setFreePassBalance] = useState(0);
   const controllers = useRef<Map<string, AbortController>>(new Map());
   const hydratedRef = useRef(false);
 
-  // 마운트 직후 1회: 서버 vote_unlocks 본인 row 전체 fetch → 영구 보유 unlock 복원
+  const refreshFreePassBalance = useCallback(async () => {
+    try {
+      const m = await getDailyMissions();
+      setFreePassBalance(m.freePassBalance);
+    } catch (e) {
+      console.error("[UnlockProvider] mission load failed:", e);
+    }
+  }, []);
+
+  // 마운트 직후 1회: 서버 vote_unlocks 본인 row 전체 fetch + 무료이용권 잔량 hydrate
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
@@ -50,14 +66,14 @@ export function UnlockProvider({
           return next;
         });
       } catch (e) {
-        // hydrate 실패는 조용히 — 사용자가 다시 광고 보면 unlock RPC가 멱등 처리
         console.error("[UnlockProvider] hydrate failed:", e);
       }
     })();
+    void refreshFreePassBalance();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshFreePassBalance]);
 
   const isUnlocked = useCallback(
     (id: string) => unlockedIds.has(id),
@@ -76,8 +92,12 @@ export function UnlockProvider({
   }, []);
 
   const unlock = useCallback(
-    async (id: string) => {
+    async (id: string, options: UnlockOptions = {}) => {
       if (controllers.current.has(id) || unlockedIds.has(id)) return;
+
+      const { forceAd = false } = options;
+      // 무료이용권 보유 + 강제 광고 모드 아니면 무료이용권으로 즉시 언락
+      const useFreePass = !forceAd && freePassBalance > 0;
 
       const ctrl = new AbortController();
       controllers.current.set(id, ctrl);
@@ -88,29 +108,36 @@ export function UnlockProvider({
       });
       setLastError(null);
 
-      const timeoutId = window.setTimeout(() => ctrl.abort(timeoutReason), AD_TIMEOUT_MS);
+      const timeoutId = useFreePass
+        ? null
+        : window.setTimeout(() => ctrl.abort(timeoutReason), AD_TIMEOUT_MS);
 
       try {
-        await watchAd(id, ctrl.signal);
-        if (ctrl.signal.aborted) return;
-        // 광고 시청 완료 → register-ad-watch로 토큰 발급
-        const tokenOutcome = await registerAdWatch("unlock_vote_result");
-        if (ctrl.signal.aborted) return;
-        if (!tokenOutcome.ok) {
-          setLastError(tokenOutcome.message);
+        if (useFreePass) {
+          const outcome = await unlockVoteResults(id, { useFreePass: true });
+          if (ctrl.signal.aborted) return;
+          if (!outcome.ok) {
+            // 무료이용권 잔량이 race로 사라졌으면 광고 fallback로 자동 재시도
+            if (outcome.reason === "free_pass_unavailable") {
+              setFreePassBalance(0);
+              await runAdUnlock(id, ctrl);
+              return;
+            }
+            setLastError(outcome.message);
+            return;
+          }
+          setFreePassBalance((b) => Math.max(0, b - 1));
+          setUnlockedIds((prev) => {
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+          });
           return;
         }
-        // 토큰을 RPC에 전달하여 서버 영구 unlock 발급
-        await unlockVoteResults(id, tokenOutcome.adToken);
-        if (ctrl.signal.aborted) return;
-        setUnlockedIds((prev) => {
-          const next = new Set(prev);
-          next.add(id);
-          return next;
-        });
+
+        await runAdUnlock(id, ctrl);
       } catch (err) {
         if (ctrl.signal.aborted) {
-          // 사용자 취소(언마운트 등)는 조용히 종료. 타임아웃은 reason으로 식별.
           if (ctrl.signal.reason === timeoutReason) {
             setLastError("광고 로드 시간이 초과됐어요.");
           }
@@ -120,7 +147,7 @@ export function UnlockProvider({
           err instanceof Error ? err.message : "광고를 불러오지 못했어요.";
         setLastError(message);
       } finally {
-        window.clearTimeout(timeoutId);
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
         controllers.current.delete(id);
         setPendingIds((prev) => {
           const next = new Set(prev);
@@ -128,8 +155,32 @@ export function UnlockProvider({
           return next;
         });
       }
+
+      async function runAdUnlock(voteId: string, controller: AbortController) {
+        await watchAd(voteId, controller.signal);
+        if (controller.signal.aborted) return;
+        const tokenOutcome = await registerAdWatch("unlock_vote_result");
+        if (controller.signal.aborted) return;
+        if (!tokenOutcome.ok) {
+          setLastError(tokenOutcome.message);
+          return;
+        }
+        const outcome = await unlockVoteResults(voteId, {
+          adToken: tokenOutcome.adToken,
+        });
+        if (controller.signal.aborted) return;
+        if (!outcome.ok) {
+          setLastError(outcome.message);
+          return;
+        }
+        setUnlockedIds((prev) => {
+          const next = new Set(prev);
+          next.add(voteId);
+          return next;
+        });
+      }
     },
-    [unlockedIds, watchAd]
+    [freePassBalance, unlockedIds, watchAd]
   );
 
   useEffect(() => {
@@ -141,8 +192,24 @@ export function UnlockProvider({
   }, []);
 
   const value = useMemo(
-    () => ({ isUnlocked, isPending, unlock, cancel, lastError, clearError }),
-    [isUnlocked, isPending, unlock, cancel, lastError, clearError]
+    () => ({
+      isUnlocked,
+      isPending,
+      unlock,
+      cancel,
+      lastError,
+      clearError,
+      freePassBalance,
+    }),
+    [
+      isUnlocked,
+      isPending,
+      unlock,
+      cancel,
+      lastError,
+      clearError,
+      freePassBalance,
+    ]
   );
 
   return (
@@ -153,20 +220,5 @@ export function UnlockProvider({
 const timeoutReason = Symbol("ad-timeout");
 
 async function defaultWatchAd(_id: string, signal: AbortSignal) {
-  // 실제 광고 SDK 연동 자리. signal.aborted를 SDK dispose에 연결할 것.
-  await new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("aborted", "AbortError"));
-      return;
-    }
-    const t = window.setTimeout(resolve, 800);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(t);
-        reject(new DOMException("aborted", "AbortError"));
-      },
-      { once: true }
-    );
-  });
+  await watchRewardAd({ signal });
 }

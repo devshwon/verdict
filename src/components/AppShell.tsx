@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { palette } from "../design/tokens";
 import { BottomNav } from "./BottomNav";
 
@@ -6,9 +6,16 @@ type Props = {
   children: ReactNode;
   footer?: ReactNode;
   hideBottomNav?: boolean;
+  /** 메인 스크롤 영역 ref. 스크롤 복원 등에 사용 */
+  mainRef?: Ref<HTMLElement>;
 };
 
-export function AppShell({ children, footer, hideBottomNav = false }: Props) {
+export function AppShell({
+  children,
+  footer,
+  hideBottomNav = false,
+  mainRef,
+}: Props) {
   return (
     <div
       style={{
@@ -20,6 +27,7 @@ export function AppShell({ children, footer, hideBottomNav = false }: Props) {
       }}
     >
       <main
+        ref={mainRef}
         style={{
           flex: 1,
           minHeight: 0,

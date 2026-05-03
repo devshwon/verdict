@@ -10,6 +10,10 @@ import type {
   DemographicBucket,
   VoteDetail,
 } from "../../features/vote-detail/types";
+import {
+  getMyCast as getMyCachedCast,
+  hasMyCast as hasMyCachedCast,
+} from "../voteCache";
 
 type DbCategory = "daily" | "relationship" | "work" | "game" | "etc";
 type UiCategoryNoAll = Exclude<CategoryKey, "all">;
@@ -224,7 +228,8 @@ export async function fetchFeedVotes(
     const options = optionsMap.get(row.id) ?? [];
     const results = resultsMap.get(row.id) ?? [];
     const closed = isClosedNow(row, now);
-    const hasMyCast = myCasts.has(row.id);
+    // 클라이언트 캐시 overlay — 상세에서 투표 직후 홈 복귀 시 서버 갱신 전에도 결과 바 노출
+    const hasMyCast = myCasts.has(row.id) || hasMyCachedCast(row.id);
     return {
       id: row.id,
       category: DB_TO_UI[row.category],
@@ -386,7 +391,8 @@ export async function fetchVoteDetail(id: string): Promise<VoteDetailResult | nu
 
   const options = optionsMap.get(row.id) ?? [];
   const results = resultsMap.get(row.id) ?? [];
-  const myOptionId = myCasts.get(row.id) ?? null;
+  // 캐시 overlay — 서버 vote_casts 반영 전에도 내 선택 즉시 반영
+  const myOptionId = myCasts.get(row.id) ?? getMyCachedCast(row.id);
   const closed = isClosedNow(row, now);
 
   const { byGender, byAge } = buildDemographicBuckets(options, results);
@@ -460,15 +466,48 @@ export async function registerAdWatch(
   return { ok: true, adToken: r.ad_token };
 }
 
+export type UnlockOutcome =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "free_pass_unavailable" | "invalid_ad_token" | "auth" | "unknown";
+      message: string;
+    };
+
 export async function unlockVoteResults(
   voteId: string,
-  adToken: string
-): Promise<void> {
+  options: { adToken?: string; useFreePass?: boolean } = {}
+): Promise<UnlockOutcome> {
+  const { adToken, useFreePass = false } = options;
   const { error } = await supabase.rpc("unlock_vote_results", {
     p_vote_id: voteId,
-    p_ad_token: adToken,
+    p_ad_token: adToken ?? null,
+    p_use_free_pass: useFreePass,
   });
-  if (error) throw error;
+  if (!error) return { ok: true };
+
+  if (error.code === "P0006") {
+    return {
+      ok: false,
+      reason: "free_pass_unavailable",
+      message: "무료이용권이 부족해요",
+    };
+  }
+  if (error.code === "P0007") {
+    return {
+      ok: false,
+      reason: "invalid_ad_token",
+      message: "광고 시청이 만료됐어요. 다시 시도해주세요",
+    };
+  }
+  if (error.code === "28000") {
+    return { ok: false, reason: "auth", message: "로그인 정보가 없어요" };
+  }
+  return {
+    ok: false,
+    reason: "unknown",
+    message: error.message ?? "결과를 열지 못했어요",
+  };
 }
 
 // 본인의 모든 vote_unlocks 조회 (UnlockProvider hydrate용)
@@ -590,7 +629,7 @@ export type RegisterInput = {
   question: string;
   options: string[];
   category: UiCategoryNoAll;
-  durationMinutes: 10 | 30 | 60 | 360 | 1440;
+  durationMinutes: 5 | 10 | 30 | 60;
   todayCandidate: boolean;
   adUsed?: boolean;
   useFreePass?: boolean;
@@ -629,7 +668,7 @@ export async function registerVote(input: RegisterInput): Promise<RegisterOutcom
       ok: false,
       reason: "cap_reached",
       message: input.todayCandidate
-        ? "오늘의 투표 후보는 하루 1건만 등록할 수 있어요"
+        ? "오늘의 투표 후보는 하루 1건만 신청할 수 있어요"
         : "오늘 등록 한도(10건)에 도달했어요",
     };
   }

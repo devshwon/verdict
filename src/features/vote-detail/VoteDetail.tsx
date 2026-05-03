@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "../../components/AppShell";
 import { Pill } from "../../components/Pill";
+import { UnlockConfirmDialog } from "../../components/UnlockConfirmDialog";
 import { getShareUrl } from "../../config/share";
 import {
   borderWidth,
@@ -16,12 +17,15 @@ import {
   radius,
   spacing,
 } from "../../design/tokens";
+import { watchRewardAd } from "../../lib/ads";
 import {
   castVote,
   fetchVoteDetail,
+  getDailyMissions,
   registerAdWatch,
   unlockVoteResults,
 } from "../../lib/db/votes";
+import { recordMyCast } from "../../lib/voteCache";
 import { AdSlot } from "./components/AdSlot";
 import { DemographicGroup } from "./components/DemographicGroup";
 import { DetailHeader } from "./components/DetailHeader";
@@ -42,9 +46,6 @@ type Phase =
   | "result";
 type ShareChannel = "kakao" | "instagram" | "url";
 
-// 임시 시뮬레이션 광고 — 실제 앱인토스 리워드 SDK 연동은 5번(TodayArchive)에서 처리
-const SIMULATED_AD_MS = 1500;
-
 export function VoteDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -57,6 +58,8 @@ export function VoteDetail() {
   const [pendingChannel, setPendingChannel] = useState<ShareChannel | null>(
     null,
   );
+  const [freePassBalance, setFreePassBalance] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const submittingRef = useRef(false);
 
@@ -95,6 +98,20 @@ export function VoteDetail() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void getDailyMissions()
+      .then((m) => {
+        if (!cancelled) setFreePassBalance(m.freePassBalance);
+      })
+      .catch((e) => {
+        console.error("[VoteDetail] missions load failed:", e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (phase === "loading") {
     return (
       <AppShell hideBottomNav>
@@ -126,7 +143,14 @@ export function VoteDetail() {
     if (myOptionId !== null || phase !== "unvoted") return;
     submittingRef.current = true;
     setPhase("submitting");
-    const result = await castVote(detail.id, optionId);
+
+    // RPC + 0.8초 연출 + 백그라운드 reload를 병렬 수행하고 셋 다 끝나면 결과 phase로 전환
+    const minDelay = new Promise<void>((r) =>
+      setTimeout(r, motion.resultDelayMs)
+    );
+    const cast = castVote(detail.id, optionId);
+
+    const result = await cast;
     if (!result.ok) {
       submittingRef.current = false;
       setToast(result.message);
@@ -137,27 +161,63 @@ export function VoteDetail() {
       }
       return;
     }
+
     setMyOptionId(optionId);
-    // 결과 연출: 짧은 딜레이 후 reload하여 최신 결과 반영
-    setTimeout(async () => {
-      await load();
-      submittingRef.current = false;
-    }, motion.resultDelayMs);
+    recordMyCast(detail.id, optionId);
+
+    // 캐스팅 성공 후 백그라운드로 최신 결과 fetch + 0.8초 연출 동기화
+    const reload = load();
+    await Promise.all([minDelay, reload]);
+    submittingRef.current = false;
   };
 
-  const handleWatchAd = async () => {
+  const requestUnlock = () => {
+    if (phase !== "ad_gate" || !detail) return;
+    if (freePassBalance > 0) {
+      setConfirmOpen(true);
+      return;
+    }
+    void unlockWithAd();
+  };
+
+  const unlockWithFreePass = async () => {
     if (phase !== "ad_gate" || !detail) return;
     setPhase("watching_ad");
+    const outcome = await unlockVoteResults(detail.id, { useFreePass: true });
+    if (!outcome.ok) {
+      // 잔량이 race로 0이면 광고 fallback
+      if (outcome.reason === "free_pass_unavailable") {
+        setFreePassBalance(0);
+        await unlockWithAd();
+        return;
+      }
+      setToast(outcome.message);
+      setPhase("ad_gate");
+      return;
+    }
+    setFreePassBalance((b) => Math.max(0, b - 1));
+    await load();
+  };
+
+  const unlockWithAd = async () => {
+    if (!detail) return;
+    setPhase("watching_ad");
     try {
-      // TODO: 실제 앱인토스 리워드 광고 SDK 시청 콜백으로 대체
-      await new Promise((r) => setTimeout(r, SIMULATED_AD_MS));
+      await watchRewardAd();
       const tokenOutcome = await registerAdWatch("unlock_vote_result");
       if (!tokenOutcome.ok) {
         setToast(tokenOutcome.message);
         setPhase("ad_gate");
         return;
       }
-      await unlockVoteResults(detail.id, tokenOutcome.adToken);
+      const outcome = await unlockVoteResults(detail.id, {
+        adToken: tokenOutcome.adToken,
+      });
+      if (!outcome.ok) {
+        setToast(outcome.message);
+        setPhase("ad_gate");
+        return;
+      }
       await load();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -255,14 +315,32 @@ export function VoteDetail() {
       {phase === "ad_gate" || phase === "watching_ad" ? (
         <AdGate
           watching={phase === "watching_ad"}
-          onWatch={handleWatchAd}
+          onWatch={requestUnlock}
           onHome={() => navigate("/", { replace: true })}
           accentBar={accent.bar}
+          freePassBalance={freePassBalance}
         />
       ) : null}
 
       {phase === "result" ? (
         <>
+          {detail.isClosed ? (
+            <div
+              style={{
+                margin: `0 ${spacing.lg}px ${spacing.md}px`,
+                padding: `${spacing.xs}px ${spacing.md}px`,
+                borderRadius: radius.sm,
+                background: palette.divider,
+                color: palette.textSecondary,
+                fontSize: fontSize.label,
+                fontWeight: fontWeight.medium,
+                alignSelf: "flex-start",
+                width: "fit-content",
+              }}
+            >
+              최종 결과
+            </div>
+          ) : null}
           <OverallResult
             options={detail.options}
             myOptionId={myOptionId}
@@ -299,6 +377,14 @@ export function VoteDetail() {
           onClose={() => setToast(null)}
         />
       ) : null}
+
+      <UnlockConfirmDialog
+        open={confirmOpen}
+        freePassBalance={freePassBalance}
+        onUseFreePass={() => void unlockWithFreePass()}
+        onWatchAd={() => void unlockWithAd()}
+        onClose={() => setConfirmOpen(false)}
+      />
     </AppShell>
   );
 }
@@ -308,11 +394,13 @@ function AdGate({
   onWatch,
   onHome,
   accentBar,
+  freePassBalance,
 }: {
   watching: boolean;
   onWatch: () => void;
   onHome: () => void;
   accentBar: string;
+  freePassBalance: number;
 }) {
   return (
     <section
@@ -347,7 +435,9 @@ function AdGate({
           lineHeight: lineHeight.body,
         }}
       >
-        결과를 보려면 광고를 시청해주세요.
+        {freePassBalance > 0
+          ? `결과를 보려면 무료이용권을 쓰거나 광고를 시청해주세요. (보유 ${freePassBalance}개)`
+          : "결과를 보려면 광고를 시청해주세요."}
       </p>
       <div
         style={{
@@ -364,7 +454,11 @@ function AdGate({
           disabled={watching}
           onClick={onWatch}
         >
-          {watching ? "광고 시청 중…" : "광고 보고 결과 확인하기"}
+          {watching
+            ? "결과를 여는 중…"
+            : freePassBalance > 0
+              ? "결과 열기"
+              : "광고 보고 결과 확인하기"}
         </Button>
         <Button
           size="medium"

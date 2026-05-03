@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { watchRewardAd } from "../../lib/ads";
 import {
   getDailyMissions,
   getRegisterStatus,
@@ -22,16 +23,12 @@ import {
   type TouchedMap,
 } from "./types";
 
-const DURATION_MINUTES: Record<DurationKey, 10 | 30 | 60 | 360 | 1440> = {
+const DURATION_MINUTES: Record<DurationKey, 5 | 10 | 30 | 60> = {
+  m5: 5,
   m10: 10,
   m30: 30,
   h1: 60,
-  h6: 360,
-  h24: 1440,
 };
-
-// 임시 시뮬레이션 광고 — VoteDetail의 광고 게이트와 동일 패턴
-const SIMULATED_AD_MS = 1500;
 
 function buildPayload(
   question: string,
@@ -66,7 +63,7 @@ type Options = {
     kind: RegisterSuccessKind,
     rejectionReason?: string | null,
   ) => void;
-  onError?: (outcome: RegisterOutcome) => void;
+  onError?: (outcome: Extract<RegisterOutcome, { ok: false }>) => void;
 };
 
 export function useRegisterForm(options: Options = {}) {
@@ -238,8 +235,7 @@ export function useRegisterForm(options: Options = {}) {
       if (willUseFreePass) {
         useFreePass = true;
       } else if (requiresAd) {
-        // TODO: 실제 앱인토스 리워드 SDK 시청 콜백으로 대체
-        await new Promise((r) => setTimeout(r, SIMULATED_AD_MS));
+        await watchRewardAd();
         const tokenOutcome = await registerAdWatch("register_3plus");
         if (!tokenOutcome.ok) {
           if (mountedRef.current) {

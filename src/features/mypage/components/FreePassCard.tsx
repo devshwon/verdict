@@ -10,10 +10,8 @@ import {
   radius,
   spacing,
 } from "../../../design/tokens";
+import { watchRewardAd } from "../../../lib/ads";
 import { claimDailyAdFreePass, registerAdWatch } from "../../../lib/db/votes";
-
-// 임시 시뮬레이션 광고 — 실 SDK 연동은 백로그 §S2
-const SIMULATED_AD_MS = 1500;
 
 type Props = {
   balance: number;
@@ -34,8 +32,7 @@ export function FreePassCard({
     if (watching || adClaimedToday) return;
     setWatching(true);
     try {
-      // TODO: 실제 앱인토스 리워드 SDK 시청 콜백으로 대체
-      await new Promise((r) => setTimeout(r, SIMULATED_AD_MS));
+      await watchRewardAd();
       const tokenOutcome = await registerAdWatch("mypage_free_pass");
       if (!tokenOutcome.ok) {
         onError(tokenOutcome.message);

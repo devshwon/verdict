@@ -22,9 +22,13 @@ export function RegisterScreen() {
   const [toast, setToast] = useState<string | null>(null);
 
   const form = useRegisterForm({
-    onSuccess: (_voteId, _payload, kind, rejectionReason) => {
+    onSuccess: (_voteId, payload, kind, rejectionReason) => {
       if (kind === "approved") {
-        setToast("등록되었어요");
+        setToast(
+          payload.todayCandidate
+            ? "후보로 신청됐어요. 선정되면 내일 오전 8시에 공개돼요"
+            : "등록되었어요",
+        );
         setTimeout(() => navigate("/"), motion.toastMs);
       } else if (kind === "rejected") {
         setToast(
@@ -34,7 +38,11 @@ export function RegisterScreen() {
         );
       } else {
         // moderation 호출 자체가 실패 — 등록은 됐으나 검열 결과 미수신
-        setToast("등록되었어요. 심사가 진행 중이에요 (마이페이지에서 결과 확인)");
+        setToast(
+          payload.todayCandidate
+            ? "후보 신청이 접수됐어요. 심사 결과는 마이페이지에서 확인할 수 있어요"
+            : "등록되었어요. 심사가 진행 중이에요 (마이페이지에서 결과 확인)",
+        );
         setTimeout(() => navigate("/"), motion.toastMs);
       }
     },
@@ -43,11 +51,13 @@ export function RegisterScreen() {
     },
   });
 
-  const submitLabel = form.willUseFreePass
-    ? "무료이용권으로 등록하기"
-    : form.requiresAd
-      ? "광고 보고 등록하기"
-      : "등록하기";
+  const submitLabel = form.todayCandidate
+    ? "오늘의 투표 후보 신청하기"
+    : form.willUseFreePass
+      ? "무료이용권으로 등록하기"
+      : form.requiresAd
+        ? "광고 보고 등록하기"
+        : "등록하기";
   const statusText = renderStatusText(form);
   const showAdToggle = form.requiresGate && form.hasFreePass;
 
@@ -182,9 +192,9 @@ function renderStatusText(form: ReturnType<typeof useRegisterForm>): string | nu
   }
   if (form.todayCandidate) {
     if (form.status.todayCandidateCapReached) {
-      return "오늘의 투표 후보는 하루 1건만 등록할 수 있어요.";
+      return "오늘의 투표 후보는 하루 1건만 신청할 수 있어요.";
     }
-    return "오늘의 투표 후보 — 작성 5P, 선정 시 +30P (1인 1일 1건)";
+    return "오늘의 투표 후보 신청 — 선정 시 다음날 오전 8시 공개. 작성 5P, 선정 시 +30P (1인 1일 1건)";
   }
   if (form.status.normalCapReached) {
     return "오늘 등록 한도(10건)에 도달했어요. 내일 다시 시도해주세요.";
