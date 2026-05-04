@@ -302,5 +302,17 @@ export async function updateDemographicsVisibility(
     p_gender_public: next.genderPublic ?? null,
     p_age_public: next.agePublic ?? null,
   });
-  if (error) throw error;
+  if (error) {
+    // PostgrestError는 plain object라 그대로 던지면 호출부의 String(e) → "[object Object]"
+    // code/message/details/hint를 합친 진단용 Error로 변환 (TODO: 운영 안정화 후 사용자 친화 메시지로 교체)
+    const parts = [
+      error.code ? `[${error.code}]` : null,
+      error.message ?? null,
+      error.details ? `details=${error.details}` : null,
+      error.hint ? `hint=${error.hint}` : null,
+    ].filter(Boolean);
+    throw new Error(
+      `update_demographics_visibility 실패 — ${parts.join(" ") || "원인 미상"}`,
+    );
+  }
 }

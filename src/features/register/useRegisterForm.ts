@@ -286,10 +286,24 @@ export function useRegisterForm(options: Options = {}) {
     } catch (e) {
       if (!mountedRef.current) return;
       console.error("[useRegisterForm] submit error:", e);
+      // 디버깅 편의를 위해 실제 원인을 토스트로 노출 (광고 SDK reject / 네트워크 / 토큰 등)
+      // TODO: 운영 안정화 후 사용자 친화 메시지로 교체
+      const detail =
+        e instanceof Error
+          ? `${e.name}: ${e.message}`
+          : typeof e === "string"
+            ? e
+            : (() => {
+                try {
+                  return JSON.stringify(e);
+                } catch {
+                  return String(e);
+                }
+              })();
       onError?.({
         ok: false,
         reason: "unknown",
-        message: "등록 중 오류가 발생했어요",
+        message: `등록 실패 — ${detail}`,
       });
     } finally {
       if (mountedRef.current) setSubmitting(false);

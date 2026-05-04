@@ -46,10 +46,17 @@ alter table public.points_log
   ));
 
 -- ============================================================================
--- 2. fn_points_category 갱신 — 트랙 분리 캡 매핑
+-- 2. fn_points_category 갱신 — 트랙 분리 캡 매핑 (int → text)
+--    Postgres가 return type 변경 시 CREATE OR REPLACE 거부하므로
+--    의존 함수까지 DROP 후 재생성. 캡도 v2 정책(행동 20P/콘텐츠 130P)으로 갱신
 -- ============================================================================
 
-create or replace function public.fn_points_category(p_trigger text)
+-- 의존 체인 정리 — fn_get_pending_payouts → fn_check_daily_payout_limit → fn_points_category
+drop function if exists public.fn_get_pending_payouts(int);
+drop function if exists public.fn_check_daily_payout_limit(uuid, int, int);
+drop function if exists public.fn_points_category(text);
+
+create function public.fn_points_category(p_trigger text)
 returns text
 language sql
 immutable
@@ -72,6 +79,93 @@ as $$
     else 'other'
   end;
 $$;
+
+-- 일일 캡 검증 — text 카테고리로 갱신 (행동 20P, 콘텐츠 130P)
+create function public.fn_check_daily_payout_limit(
+  p_user_id uuid,
+  p_category text,
+  p_amount int
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_kst_today_start timestamptz;
+  v_today_total int;
+  v_limit int;
+begin
+  v_kst_today_start := date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul';
+
+  v_limit := case p_category
+    when 'behavior' then 20
+    when 'content' then 130
+    else 20
+  end;
+
+  select coalesce(sum(amount), 0) into v_today_total
+  from public.points_log
+  where user_id = p_user_id
+    and created_at >= v_kst_today_start
+    and status in ('pending', 'completed')
+    and public.fn_points_category(trigger) = p_category;
+
+  return (v_today_total + p_amount) > v_limit;
+end;
+$$;
+
+-- worker 호출용 — 시그니처 변경 없음, 내부에서 text 카테고리 전달
+create function public.fn_get_pending_payouts(p_batch_size int default 100)
+returns table (
+  id uuid,
+  user_id uuid,
+  trigger text,
+  amount int,
+  related_vote_id uuid,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec record;
+  v_limit_breached boolean;
+begin
+  for rec in
+    select pl.id, pl.user_id, pl.trigger, pl.amount
+    from public.points_log pl
+    join public.users u on u.id = pl.user_id
+    where pl.status = 'pending'
+      and u.created_at <= now() - interval '24 hours'
+    order by pl.created_at asc
+  loop
+    v_limit_breached := public.fn_check_daily_payout_limit(
+      rec.user_id,
+      public.fn_points_category(rec.trigger),
+      rec.amount
+    );
+    if v_limit_breached then
+      update public.points_log
+      set status = 'blocked'
+      where id = rec.id;
+    end if;
+  end loop;
+
+  return query
+    select pl.id, pl.user_id, pl.trigger, pl.amount, pl.related_vote_id, pl.created_at
+    from public.points_log pl
+    join public.users u on u.id = pl.user_id
+    where pl.status = 'pending'
+      and u.created_at <= now() - interval '24 hours'
+    order by pl.created_at asc
+    limit p_batch_size;
+end;
+$$;
+
+revoke execute on function public.fn_get_pending_payouts(int) from public, anon, authenticated;
 
 -- ============================================================================
 -- 3. users.current_streak 정의 명확화
