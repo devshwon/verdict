@@ -37,7 +37,13 @@ const UI_TO_DB: Record<UiCategoryNoAll, DbCategory> = {
 type VoteRow = {
   id: string;
   category: DbCategory;
-  status: "pending_review" | "active" | "closed" | "blinded" | "deleted";
+  status:
+    | "pending_review"
+    | "active"
+    | "closed"
+    | "blinded"
+    | "blinded_by_reports"
+    | "deleted";
   type: "normal" | "today" | "today_candidate";
   question: string;
   started_at: string;
@@ -918,6 +924,66 @@ export async function claimPoints(logIds: string[]): Promise<number> {
   });
   if (error) throw error;
   return typeof data === "number" ? data : 0;
+}
+
+// ============================================================================
+// 신고 (사후 모더레이션)
+// ============================================================================
+
+export type ReportReason =
+  | "hate"
+  | "spam"
+  | "sexual"
+  | "violence"
+  | "personal_info"
+  | "other";
+
+export type ReportVoteOutcome =
+  | { ok: true; duplicated: boolean; blinded: boolean }
+  | {
+      ok: false;
+      reason: "auth" | "self" | "not_found" | "unknown";
+      message: string;
+    };
+
+export async function reportVote(
+  voteId: string,
+  reason: ReportReason
+): Promise<ReportVoteOutcome> {
+  const { data, error } = await supabase.rpc("report_vote", {
+    p_vote_id: voteId,
+    p_reason: reason,
+  });
+  if (!error) {
+    const row = data as { duplicated?: boolean; blinded?: boolean } | null;
+    return {
+      ok: true,
+      duplicated: !!row?.duplicated,
+      blinded: !!row?.blinded,
+    };
+  }
+  if (error.code === "28000") {
+    return { ok: false, reason: "auth", message: "로그인 정보가 없어요" };
+  }
+  if (error.code === "P0009") {
+    return {
+      ok: false,
+      reason: "self",
+      message: "내가 등록한 투표는 신고할 수 없어요",
+    };
+  }
+  if (error.code === "P0001") {
+    return {
+      ok: false,
+      reason: "not_found",
+      message: "이미 삭제된 투표예요",
+    };
+  }
+  return {
+    ok: false,
+    reason: "unknown",
+    message: error.message ?? "신고에 실패했어요",
+  };
 }
 
 export async function claimAllUnclaimedPoints(): Promise<{

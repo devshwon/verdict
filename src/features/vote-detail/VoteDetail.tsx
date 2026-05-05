@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "../../components/AppShell";
 import { Pill } from "../../components/Pill";
+import { ReportDialog } from "../../components/ReportDialog";
 import { UnlockConfirmDialog } from "../../components/UnlockConfirmDialog";
-import { getShareUrl } from "../../config/share";
+import { buildShareableLink } from "../../config/share";
 import {
   borderWidth,
   categories,
@@ -23,8 +24,10 @@ import {
   fetchVoteDetail,
   getDailyMissions,
   registerAdWatch,
+  reportVote,
   unlockVoteResults,
 } from "../../lib/db/votes";
+import type { ReportReason } from "../../lib/db/votes";
 import { recordMyCast } from "../../lib/voteCache";
 import { AdSlot } from "./components/AdSlot";
 import { DemographicGroup } from "./components/DemographicGroup";
@@ -44,7 +47,9 @@ type Phase =
   | "ad_gate"
   | "watching_ad"
   | "result";
-type ShareChannel = "kakao" | "instagram" | "url";
+// 카카오톡/인스타그램 공유는 추후 지원 — 현재는 url(토스 공유 링크 복사)만
+type ShareChannel = "url";
+// type ShareChannel = "kakao" | "instagram" | "url";
 
 export function VoteDetail() {
   const { id = "" } = useParams();
@@ -60,6 +65,8 @@ export function VoteDetail() {
   );
   const [freePassBalance, setFreePassBalance] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportPending, setReportPending] = useState(false);
 
   const submittingRef = useRef(false);
 
@@ -232,21 +239,48 @@ export function VoteDetail() {
     else navigate(-1);
   };
 
+  const handleReportSelect = async (reason: ReportReason) => {
+    if (!detail || reportPending) return;
+    setReportPending(true);
+    try {
+      const outcome = await reportVote(detail.id, reason);
+      if (!outcome.ok) {
+        setToast(outcome.message);
+        return;
+      }
+      if (outcome.duplicated) {
+        setToast("이미 신고한 투표예요");
+      } else if (outcome.blinded) {
+        setToast("신고가 접수돼 비공개로 전환됐어요");
+      } else {
+        setToast("신고가 접수됐어요");
+      }
+    } catch (e) {
+      console.error("[VoteDetail] report failed:", e);
+      setToast("신고에 실패했어요. 잠시 후 다시 시도해주세요");
+    } finally {
+      setReportPending(false);
+      setReportOpen(false);
+    }
+  };
+
   const handleShare = async (channel: ShareChannel) => {
     if (pendingChannel !== null) return;
     setPendingChannel(channel);
     try {
       if (channel === "url") {
         try {
-          await navigator.clipboard.writeText(getShareUrl(detail.id));
+          const link = await buildShareableLink(detail.id);
+          await navigator.clipboard.writeText(link);
           setToast("링크가 복사됐어요");
         } catch {
           setToast("복사에 실패했어요");
         }
         return;
       }
-      const label = channel === "kakao" ? "카카오톡" : "인스타그램";
-      setToast(`${label} 공유는 곧 지원될 예정이에요`);
+      // 카카오톡/인스타그램 분기는 추후 지원 — 현재는 채널 union 에 url 만 존재
+      // const label = channel === "kakao" ? "카카오톡" : "인스타그램";
+      // setToast(`${label} 공유는 곧 지원될 예정이에요`);
     } finally {
       setTimeout(() => {
         setPendingChannel((prev) => (prev === channel ? null : prev));
@@ -256,7 +290,7 @@ export function VoteDetail() {
 
   return (
     <AppShell hideBottomNav>
-      <DetailHeader onBack={handleBack} />
+      <DetailHeader onBack={handleBack} onReport={() => setReportOpen(true)} />
 
       <section
         style={{
@@ -384,6 +418,13 @@ export function VoteDetail() {
         onUseFreePass={() => void unlockWithFreePass()}
         onWatchAd={() => void unlockWithAd()}
         onClose={() => setConfirmOpen(false)}
+      />
+
+      <ReportDialog
+        open={reportOpen}
+        pending={reportPending}
+        onSelect={(reason) => void handleReportSelect(reason)}
+        onClose={() => setReportOpen(false)}
       />
     </AppShell>
   );

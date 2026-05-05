@@ -30,6 +30,11 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
+// 모더레이션 모드 — 기본값은 사후 모더레이션(LLM 차단 없음)
+//   - 'heuristic_only': 사전 휴리스틱만 적용. 통과 시 즉시 active. LLM 호출 안 함.
+//   - 'with_llm': 기존 흐름. 휴리스틱 + LLM 검열로 차단.
+const MODERATION_MODE = (Deno.env.get('MODERATION_MODE') ?? 'heuristic_only').toLowerCase()
+
 // 기획서 §10 — gpt-4o-mini로 검열 (한국어 분류 + JSON 출력에 충분, 비용 효율 최대)
 const OPENAI_MODEL = 'gpt-4o-mini'
 const SIMILARITY_SAMPLE_LIMIT = 10
@@ -105,24 +110,39 @@ async function callOpenAI(
     return { approved: true, ai_score: 5.0, rejection_reason: null }
   }
 
+  const hasSample = recentSample.length > 0
+
+  // 평가기준 4(유사도)는 샘플이 있을 때만 노출. 샘플이 없으면 환각으로 "유사" 판정 방지
+  const similarityRule = hasSample
+    ? `4. 아래 샘플 중 "사실상 같은 질문"이 있으면 → reject
+   - 사실상 같다 = 주제·답안 구조·의도가 거의 동일 (표현·어투·길이 차이는 무관)
+   - 카테고리만 같고 주제 영역이 다르면 유사 아님
+     예) "어떤 카드가 좋아?" vs "첫만남 더치페이?" → 둘 다 daily여도 주제(결제수단 vs 데이팅 매너)가 달라 유사 아님
+   - 유사 reject는 반드시 similar_to_index 에 일치 샘플 번호(1-base) 명시. 못 대면 유사 reject 금지`
+    : ''
+
   const systemPrompt = `당신은 한국어 소셜 투표 앱 "Verdict"의 질문 검열관입니다.
 사용자가 등록한 투표 질문/선택지를 다음 기준으로 평가하고 JSON으로만 응답하세요.
 
 평가 기준:
 1. 혐오/비하/정치적 편향 표현 → reject
 2. 의미 없는 도배·테스트성 텍스트 → reject
-3. 폭력·선정·범죄 미화 → reject
-4. 최근 30일 내 매우 유사한 질문이 있으면 → reject (사유에 "유사 질문 존재" 명시)
-5. 통과 시 흥미도 0.0~10.0 점수 산출 (대중 의견이 갈릴수록 ↑, 정답 있는 질문일수록 ↓)
+3. 폭력·선정·범죄 미화 → reject${similarityRule ? '\n' + similarityRule : ''}
+${hasSample ? '5' : '4'}. 통과 시 흥미도 0.0~10.0 점수 산출 (대중 의견이 갈릴수록 ↑, 정답 있는 질문일수록 ↓)
+
+rejection_reason 작성 규칙:
+- 자연스러운 한 문장. 정해진 라벨 문구를 강제로 끼워 넣지 마세요.
+- 유사 사유라도 "유사 질문 존재" 같은 라벨이 아니라 어떤 점이 같은지 한 문장으로.
 
 응답 형식 (반드시 이 JSON 스키마만):
 {
   "approved": true|false,
   "ai_score": 0.0~10.0 (approved=true일 때만, false면 null),
-  "rejection_reason": "한 문장 사유" (approved=false일 때만, true면 null)
+  "rejection_reason": "한 문장 사유" (approved=false일 때만, true면 null),
+  "similar_to_index": 1~N 정수 (유사 사유로 reject할 때만, 그 외 null)
 }`
 
-  const recentSection = recentSample.length > 0
+  const recentSection = hasSample
     ? `\n\n최근 30일 같은 카테고리 질문 샘플 (유사도 비교용):\n${recentSample.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
     : ''
 
@@ -164,10 +184,26 @@ async function callOpenAI(
     approved?: boolean
     ai_score?: number | null
     rejection_reason?: string | null
+    similar_to_index?: number | null
   }
 
   if (typeof parsed.approved !== 'boolean') {
     throw new Error('OpenAI response missing "approved" field')
+  }
+
+  // 유사 사유 reject 가드: 샘플 인덱스를 못 대면 검열 통과로 전환 (false positive 방지)
+  if (parsed.approved === false) {
+    const reason = (parsed.rejection_reason ?? '').trim()
+    const looksLikeSimilarity = /유사|중복|이미|already|similar|duplicate/i.test(reason)
+    const idx = parsed.similar_to_index
+    const validIdx = typeof idx === 'number' && Number.isInteger(idx) && idx >= 1 && idx <= recentSample.length
+
+    if (looksLikeSimilarity && !validIdx) {
+      console.warn(
+        `[moderate-vote] similarity reject without valid index — overriding to approve. reason="${reason}" idx=${idx}`,
+      )
+      return { approved: true, ai_score: 5.0, rejection_reason: null }
+    }
   }
 
   return {
@@ -293,6 +329,42 @@ Deno.serve(async (req) => {
       }))
     }
 
+    // ── 사후 모더레이션 모드 (기본): LLM 호출 없이 즉시 active 전환 ──
+    if (MODERATION_MODE === 'heuristic_only') {
+      const eligible = await deriveRewardEligibility(admin, vote)
+
+      const { error: updErr } = await admin
+        .from('votes')
+        .update({
+          status: 'active',
+          ai_score: null,
+          rejection_reason: null,
+        })
+        .eq('id', voteId)
+        .eq('status', 'pending_review')
+      if (updErr) throw updErr
+
+      // approved=true 로 기록 → 등록 보상 정상 적립
+      const { error: recErr } = await admin.rpc('fn_record_moderation_result', {
+        p_vote_id: voteId,
+        p_user_id: vote.author_id,
+        p_vote_type: vote.type,
+        p_eligible_for_register_reward: eligible,
+        p_approved: true,
+        p_rejection_source: null,
+      })
+      if (recErr) console.error('[moderate-vote] record (heuristic_only) failed:', recErr.message)
+
+      return withCors(Response.json({
+        ok: true,
+        approved: true,
+        ai_score: null,
+        rejection_reason: null,
+        status: 'active',
+      }))
+    }
+
+    // ── 이하 with_llm 모드 ──
     // ── 일일 검열 호출 캡 체크 (cost 안전망) ───────────────────
     const { data: callOk, error: callErr } = await admin.rpc('fn_check_moderation_call', {
       p_user_id: vote.author_id,
