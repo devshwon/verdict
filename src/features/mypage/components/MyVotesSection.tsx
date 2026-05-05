@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
 import { SectionTitle } from "../../../components/SectionTitle";
 import {
@@ -153,14 +154,30 @@ function statusLabel(status: MyVoteStatus): {
 }
 
 function Row({ vote }: { vote: MyVote }) {
+  const navigate = useNavigate();
   const cat = categoryColors[vote.category];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
   const isOngoing = vote.status === "ongoing";
   const sLabel = statusLabel(vote.status);
+  // 심사 중/반려는 상세가 fetchVoteDetail의 status 필터(active|closed)에 걸려 NotFound 처리되므로 진입 차단
+  const canOpen = vote.status === "ongoing" || vote.status === "closed";
 
   return (
     <div
+      role={canOpen ? "button" : undefined}
+      tabIndex={canOpen ? 0 : undefined}
+      onClick={canOpen ? () => navigate(`/vote/${vote.id}`) : undefined}
+      onKeyDown={
+        canOpen
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(`/vote/${vote.id}`);
+              }
+            }
+          : undefined
+      }
       style={{
         padding: spacing.md,
         borderRadius: radius.md,
@@ -169,6 +186,7 @@ function Row({ vote }: { vote: MyVote }) {
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: canOpen ? "pointer" : "default",
       }}
     >
       <div

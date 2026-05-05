@@ -86,7 +86,8 @@ export function VoteDetail() {
       setMyOptionId(res.myOptionId);
       if (!res.detail.isClosed && res.myOptionId === null) {
         setPhase("unvoted");
-      } else if (res.myOptionId !== null || res.hasUnlock) {
+      } else if (res.myOptionId !== null || res.hasUnlock || res.isAuthor) {
+        // 마감된 본인 작성 투표는 광고/언락 없이 결과 공개 (작성자 권한)
         setPhase("result");
       } else {
         // 마감 + 미참여 + 미언락 → 광고 게이트

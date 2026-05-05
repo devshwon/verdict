@@ -8,13 +8,15 @@
 ## 1. 목적과 범위
 
 ### 1-1. 핵심 책임
+- **카테고리별 일반투표 관리** — 일반투표 목록 조회·검색·필터, 부적절 판단 시 사유와 함께 soft delete (반려 처리)
+- **신고된 투표 처리** — 신고 1건 이상 누적된 투표를 별도 큐에서 검토, 신고 내용 펼쳐보기, 운영자 판단으로 반려/유지
 - **오늘의 투표 선정** — `today_candidate` 풀에서 카테고리당 1건씩 골라 `today` 로 승격 + 작성자에게 `today_selection` 보상 적립
-- **자동 선정 결과 검토** — cron이 자동으로 뽑은 결과를 사후 확인/수정
-- **OpenAI 프롬프트 관리** — 자동 선정 시 사용하는 system/user 프롬프트 콘솔에서 수정
+- **자동 랭킹 결과 검토** — KST 00:00 cron이 카테고리별 5개 랭킹 산출 → 운영자가 KST 07:00 전에 1건 수동 선택 → 미선택 시 KST 07:00 fallback cron 이 1순위 자동 발행
+- **OpenAI 프롬프트 관리** — 자동 랭킹 시 사용하는 system/user 프롬프트 콘솔에서 수정
 - **운영 메트릭** — 어제/오늘의 미션 보상 누적, 검열 반려율, 비즈월렛 잔액
 
 ### 1-2. 범위 밖
-- 사용자/투표 직접 편집 (필요 시 Supabase Dashboard 사용)
+- 사용자 직접 편집 (필요 시 Supabase Dashboard 사용)
 - 토스 결제 콘솔 작업 (토스 웹콘솔에서 별도)
 - 광고 SDK 운영
 
@@ -22,23 +24,27 @@
 
 ## 2. 단계별 로드맵
 
-### Phase 1 — 수동 선정 (MVP)
-1. 관리자 로그인 (Supabase Auth)
-2. "오늘의 투표 후보" 페이지 — 어제 등록된 `today_candidate` 카테고리별 그룹핑
-3. 각 카테고리에서 1건 선택 → "발행" 버튼 → `promote_today_candidates` RPC 호출
-4. 발행 결과 토스트 + DB 반영 자동 확인
+### Phase 1 — 수동 운영 (MVP)
+1. 관리자 로그인 (Supabase Auth, 또는 토스 OAuth + `is_admin` 가드)
+2. **VotesPage** — 카테고리별 일반투표 목록 + 검색/필터 + 행 클릭 시 상세 다이얼로그 → 사유 입력 후 soft delete
+3. **ReportsPage** — `vote_reports` 1건 이상 누적된 투표 큐. 행 클릭 시 펼침으로 신고 사유/사용자/시각 표시. "반려 처리" 버튼으로 status→`blinded`(또는 `deleted`) 전환 + 사유 기록
+4. **CandidatesPage** — 어제 등록된 `today_candidate` 카테고리별 그룹핑 → 1건 선택 → `promote_today_candidates` RPC 호출
 
-### Phase 2 — 자동 선정 + 검토
-1. **cron job** (Supabase Edge Function + pg_cron, KST 매일 07:30) — 어제 후보 풀에 대해 OpenAI 흥미도 평가 → 카테고리별 최고 점수 1건 자동 promote
-2. 관리자 페이지에 **"오늘의 선정 결과"** 페이지 — cron이 선정한 결과 + AI 점수 + 사유 노출
-3. 운영자가 수동 override 가능 (자동 선정 취소 후 다른 후보 재선정)
-4. **프롬프트 편집 페이지** — system / user prompt 텍스트 영역 + 저장 → DB의 `admin_prompts` 테이블 갱신 → cron이 매번 최신 프롬프트 사용
+### Phase 2 — 자동 랭킹 + 프롬프트 관리
+1. **cron job — 자동 랭킹** (Supabase Edge Function + pg_cron, **KST 매일 00:00**)
+   - 어제 후보 풀에 대해 OpenAI 흥미도 평가
+   - 카테고리별 **상위 5개 랭킹** 산출 → `today_rankings` 테이블에 캐시
+   - 이 단계에서는 **자동 발행 안 함** (운영자 검토 시간 확보)
+2. **RankingsPage** — `today_rankings` 카테고리별 상위 5개 카드 + AI 점수/사유 + "이걸로 발행" 버튼 → `promote_today_candidates`
+3. **cron job — fallback 발행** (**KST 매일 07:00**)
+   - 발행일 기준 카테고리 중 아직 `today` 발행 없는 곳에 대해 `today_rankings` 1순위로 자동 promote
+   - 운영자가 출장/휴무여도 컨텐츠 공백 방지
+4. **PromptsPage** — system / user prompt 텍스트 영역 + 저장 → `admin_prompts` 테이블 갱신 → cron 이 매번 최신 프롬프트 사용
 
 ### Phase 3 — 미래 확장 (참고용)
-- 검열 반려 사례 검토 + 수동 복구
-- 사용자 신고 처리 페이지
 - 100명 달성 보너스 / 광고 보호 환급 통계 대시보드
 - 일별 토스포인트 지급 현황 (비즈월렛 잔액 모니터링)
+- `report_weight` 어뷰저 down 도구 (악성 신고자 가중치 조정)
 
 ---
 
@@ -82,11 +88,12 @@ verdict-admin/
 │   │   ├── selections.ts          # 자동 선정 결과 조회
 │   │   └── metrics.ts             # 운영 메트릭 (Phase 3)
 │   ├── pages/
-│   │   ├── DashboardPage.tsx      # 홈 — 오늘의 상태 요약
-│   │   ├── CandidatesPage.tsx     # Phase 1 핵심 — 카테고리별 후보 + 발행
-│   │   ├── SelectionsPage.tsx     # Phase 2 — cron 자동 선정 결과
-│   │   ├── PromptsPage.tsx        # Phase 2 — system/user prompt 편집
-│   │   └── ModerationPage.tsx     # Phase 3 — 반려 사례
+│   │   ├── DashboardPage.tsx      # 홈 — 오늘의 상태 요약 + 신고 큐 카운트
+│   │   ├── VotesPage.tsx          # Phase 1 — 카테고리별 일반투표 관리 + soft delete
+│   │   ├── ReportsPage.tsx        # Phase 1 — 신고 1건+ 큐 검토 + 반려 처리
+│   │   ├── CandidatesPage.tsx     # Phase 1 — 어제 후보 카테고리별 그룹 + 발행
+│   │   ├── RankingsPage.tsx       # Phase 2 — 자동 랭킹 top 5 + 발행
+│   │   └── PromptsPage.tsx        # Phase 2 — system/user prompt 편집
 │   └── components/
 │       ├── Sidebar.tsx
 │       ├── CandidateCard.tsx
@@ -232,27 +239,141 @@ grant execute on function public.admin_list_today_candidates(date) to authentica
 
 ---
 
-## 7. Phase 2 — 자동 선정 + 프롬프트 관리
+## 6-A. Phase 1 — VotesPage (일반투표 관리)
 
-### 7-1. cron job 설계
+### 6-A-1. 화면 구성
+```
+┌──────────────────────────────────────────────────────────┐
+│ 일반투표 관리                                             │
+│ 카테고리: [전체 ▾] 상태: [active ▾] 검색: [_________]    │
+├──────────────────────────────────────────────────────────┤
+│ 카테고리 │ 질문                       │ 참여 │ 신고 │ 등록일 │
+│ 일상     │ 카톡 읽씹, 화가 나?       │  82  │  0  │ 05-04 │
+│ 직장     │ ...                        │  12  │  3  │ 05-04 │
+│ ...                                                       │
+├──────────────────────────────────────────────────────────┤
+│ ◀ 1 2 3 ▶                                                │
+└──────────────────────────────────────────────────────────┘
 
-**Edge Function 신규**: `supabase/functions/auto-select-today/index.ts`
+[행 클릭 → 다이얼로그]
+┌──────────────────────────────────────┐
+│ "카톡 읽씹, 화가 나?"                │
+│ 카테고리: 일상  상태: active          │
+│ 작성: 2026-05-04 14:23 by user_abc   │
+│ 선택지: 화남 / 신경 안 씀             │
+│ 참여: 82명, 신고: 0건                │
+│ ────────────────────────────────────│
+│ 반려 사유 (필수):                    │
+│ ┌──────────────────────────────┐    │
+│ │ 동일 주제 중복 등록           │    │
+│ └──────────────────────────────┘    │
+│ [반려 처리]    [닫기]                │
+└──────────────────────────────────────┘
+```
+
+### 6-A-2. 데이터/RPC
+- 신규 RPC `admin_list_votes(p_category text, p_status text[], p_search text, p_limit int, p_offset int)` — `is_admin` 가드, RLS 우회 (security definer)
+- 신규 RPC `admin_soft_delete_vote(p_vote_id uuid, p_reason text)` — `votes.status='deleted'` + `rejection_reason=p_reason`로 갱신, 감사 로그 INSERT
+- 신규 테이블 `admin_moderation_actions(id, vote_id, admin_id, action, reason, created_at)` — 감사 로그
+
+### 6-A-3. 부수 효과 (반려 처리 시)
+- `votes.status='deleted'` → 클라이언트 피드/상세에서 자동 제외 (기존 RLS/필터에서 `deleted` 제외 됨)
+- 작성자에게는 사유 노출 안 함 (마이페이지 `blinded` 표시와 동일 정책 적용 가능 — 추후 결정)
+- 광고 환급/free pass 환급은 기존 트리거 재사용 여부 확정 필요 (Phase 1 시점에 결정)
+
+---
+
+## 6-B. Phase 1 — ReportsPage (신고 처리)
+
+### 6-B-1. 화면 구성
+```
+┌──────────────────────────────────────────────────────────┐
+│ 신고된 투표 (총 X건, 미처리 Y건)                         │
+│ 정렬: [신고수 많은 순 ▾]  필터: [미처리만 ☑]             │
+├──────────────────────────────────────────────────────────┤
+│ ▼ "..."  카테고리:일상  신고 5건  status:active          │
+│   └ 펼침 ─────────────────────────────────────────────  │
+│     • 2026-05-04 14:23  user_abc  사유: hate            │
+│     • 2026-05-04 15:01  user_xyz  사유: spam            │
+│     • 2026-05-04 16:11  user_def  사유: hate            │
+│     [반려 처리 (사유 입력)]   [유지 (false positive)]   │
+│ ▶ "..."  카테고리:직장  신고 3건  status:blinded_by_reports
+│ ▶ "..."  카테고리:게임  신고 1건  status:active          │
+└──────────────────────────────────────────────────────────┘
+```
+
+- 행 클릭 시 펼침(아코디언)으로 `vote_reports` 상세 노출
+- "반려 처리" → 운영자가 검토 후 강제 처리 (이미 임계 도달로 `blinded_by_reports`인 경우도 영구 `blinded`로 승격 가능)
+- "유지" → status 복원 (`blinded_by_reports → active`), false positive 케이스
+
+### 6-B-2. 데이터/RPC
+- 신규 RPC `admin_list_reported_votes(p_status_filter text, p_only_pending boolean, p_limit int, p_offset int)` — 신고 ≥1건 vote 목록, 신고수/최근 신고 시각/현재 status 포함
+- 신규 RPC `admin_get_vote_reports(p_vote_id uuid)` — 특정 vote의 모든 `vote_reports` 행 + 신고자 닉네임/시각/사유 반환
+- 반려 처리 → 위 §6-A-2 의 `admin_soft_delete_vote` 재사용 (action='soft_delete' 기록)
+- 유지 처리 → 신규 RPC `admin_restore_vote(p_vote_id uuid, p_reason text)` (action='restore' 기록, status를 'active'로 복원)
+
+### 6-B-3. 정책 노트
+- 사용자 신고가 임계 미달이어도 1건 누적되면 admin 큐에 노출 → 잠재 어뷰즈 조기 발견
+- `report_weight` 어뷰저 down 은 Phase 3 도구. Phase 1에서는 신고 사유 분포로 운영자가 수동 판단
+- `vote_reports` 의 reporter는 운영자 화면에서 user_id 끝 4자리만 표시 (개인정보 최소화)
+
+---
+
+## 7. Phase 2 — 자동 랭킹 + 수동 선정 + fallback
+
+### 7-1. 시간 정책
+
+| 시각 (KST) | 동작 |
+|---|---|
+| **00:00** | cron 1 — 어제 후보 풀 OpenAI 평가 → 카테고리별 top 5 `today_rankings` 캐시. **발행 안 함** |
+| 00:00 ~ 06:59 | 운영자가 RankingsPage 접속 → 카테고리별 1건 수동 선택 → `promote_today_candidates` |
+| **07:00** | cron 2 — 발행일 카테고리 중 아직 `today` 없는 곳에 대해 `today_rankings` 1순위로 자동 promote (fallback) |
+| 07:00 이후 | 운영자가 결과 검토. 마음에 안 들면 RankingsPage에서 다른 후보로 수동 override (idempotent) |
+
+### 7-2. cron 설계
+
+**Edge Function 신규 (cron 1)**: `supabase/functions/auto-rank-today/index.ts`
 
 흐름:
 1. `admin_list_today_candidates(yesterday)` 로 후보 풀 조회
 2. 카테고리별로 묶음 (`daily / relationship / work / game`)
 3. 각 카테고리에 대해 OpenAI 호출 — 후보 5~10개를 흥미도로 ranking
-4. 1위를 자동 선택 → `promote_today_candidates` 호출
-5. 결과를 신규 테이블 `auto_selections` 에 기록 (관리자 페이지 노출용)
+4. 카테고리별 top 5 → `today_rankings` UPSERT (`publish_date + category`)
+5. 발행은 안 함 (운영자 시간 확보)
 
-**pg_cron 등록** (KST 07:30):
+**Edge Function 신규 (cron 2)**: `supabase/functions/auto-select-fallback/index.ts`
+
+흐름:
+1. 오늘 발행일에 `today` 가 아직 없는 카테고리 조회
+2. 해당 카테고리의 `today_rankings.ranks[0]` (1순위) vote_id 추출
+3. 운영자 명의로 promote 안 됨 → `promote_today_candidates` 는 `auth.uid()` 검증하므로 admin RPC 변형 필요. 신규 RPC `auto_promote_from_rankings(p_publish_date date)` (security definer, 호출자 검증 X, service_role only)
+4. 결과를 `auto_selections.status='auto_fallback'` 으로 기록
+
+**pg_cron 등록**:
 ```sql
+-- cron 1 — KST 00:00 (UTC 15:00 전날)
 select cron.schedule(
-  'auto-select-today',
-  '30 22 * * *',  -- UTC 22:30 = KST 07:30
+  'auto-rank-today',
+  '0 15 * * *',
   $$
     select net.http_post(
-      url := 'https://<project>.supabase.co/functions/v1/auto-select-today',
+      url := current_setting('app.auto_rank_today_url'),
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
+        'Content-Type', 'application/json'
+      ),
+      body := '{}'::jsonb
+    );
+  $$
+);
+
+-- cron 2 — KST 07:00 (UTC 22:00 전날)
+select cron.schedule(
+  'auto-select-fallback',
+  '0 22 * * *',
+  $$
+    select net.http_post(
+      url := current_setting('app.auto_select_fallback_url'),
       headers := jsonb_build_object(
         'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
         'Content-Type', 'application/json'
@@ -287,7 +408,24 @@ const userTemplate = prompts.find(p => p.key === 'today_selection_user').value;
 // {category} {candidates} 같은 placeholder 치환 후 OpenAI 호출
 ```
 
-### 7-3. 신규 테이블 — auto_selections
+### 7-3. 신규 테이블 — today_rankings
+
+```sql
+create table public.today_rankings (
+  id uuid primary key default gen_random_uuid(),
+  publish_date date not null,
+  category text not null,
+  ranks jsonb not null,            -- [{rank:1, vote_id, score, reason}, ...] top 5
+  candidates_summary jsonb,        -- 평가 대상 전체 후보 vote_id + score (감사용)
+  prompt_version text,             -- admin_prompts 시점의 해시/버전 (재현성)
+  created_at timestamptz not null default now(),
+  unique (publish_date, category)
+);
+
+create index idx_today_rankings_date on public.today_rankings(publish_date desc);
+```
+
+### 7-3-A. 신규 테이블 — auto_selections (감사용)
 
 ```sql
 create table public.auto_selections (
@@ -295,10 +433,10 @@ create table public.auto_selections (
   publish_date date not null,
   category text not null,
   vote_id uuid references public.votes(id) on delete set null,
+  source text not null,            -- 'admin_manual' | 'auto_fallback' | 'admin_override'
+  rank_used int,                   -- fallback 시 1, override 시 선택된 순위
   ai_score numeric(4,2),
   ai_reason text,
-  candidates_summary jsonb,        -- 후보들의 vote_id + score 목록 (감사용)
-  status text not null default 'auto_selected',  -- 'auto_selected' / 'admin_overridden' / 'failed'
   created_at timestamptz not null default now(),
   unique (publish_date, category)
 );
@@ -306,24 +444,30 @@ create table public.auto_selections (
 create index idx_auto_selections_date on public.auto_selections(publish_date desc);
 ```
 
-### 7-4. 관리자 페이지 — SelectionsPage
+### 7-4. 관리자 페이지 — RankingsPage
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ 자동 선정 결과 (2026-05-04)                     │
+│ 자동 랭킹 (2026-05-04 발행 대상)                │
+│ 산출 시각: KST 00:00 / 자동 발행 예정: KST 07:00│
 ├─────────────────────────────────────────────────┤
-│ [일상] ✅ "카톡 읽씹, 화가 나?"  AI 8.4점       │
-│   사유: 의견이 갈리는 보편 주제, 응답 풍부 예상  │
-│   다른 후보 12건 (펼쳐보기)                      │
-│   [수동 변경] 버튼                               │
+│ [일상]                                          │
+│  ① "카톡 읽씹, 화가 나?"  AI 8.4   [발행]      │
+│  ② "월요일이 제일 싫지?"  AI 7.9              │
+│  ③ "..."                  AI 7.3              │
+│  ④ "..."                  AI 6.8              │
+│  ⑤ "..."                  AI 6.1              │
 ├─────────────────────────────────────────────────┤
-│ [연애] ✅ "..."   8.1점                         │
-│ [직장] ⚠️ 후보 0건 — 미발행                     │
-│ [게임] ✅ "..."   7.9점                         │
+│ [연애] ① "..." 8.1점  [발행]  ② ③ ④ ⑤        │
+│ [직장] ⚠️ 후보 0건 — fallback 시에도 미발행   │
+│ [게임] ① "..." 7.9점  [발행]  ② ③ ④ ⑤        │
 └─────────────────────────────────────────────────┘
 ```
 
-- "수동 변경" 클릭 → 같은 페이지에서 후보 리스트 펼침 → 다른 vote 선택 → `promote_today_candidates` 재호출 (idempotent — `today_selection` 중복 INSERT는 idempotency_key로 차단)
+- 카테고리별 top 5 카드 표시 (1위 강조)
+- "발행" 클릭 → `promote_today_candidates` 호출 (idempotent — `today_selection` 보상 중복 INSERT는 idempotency_key로 차단)
+- 이미 발행된 카테고리는 "발행됨" 뱃지 + override 버튼 (다른 순위로 변경 시 기존 today 강등 후 재발행 RPC 필요 — Phase 2 후반 결정)
+- KST 07:00 이후 진입 시 fallback 결과(`auto_selections.source='auto_fallback'`) 시각적으로 구분
 
 ### 7-5. 관리자 페이지 — PromptsPage
 
@@ -351,9 +495,11 @@ create index idx_auto_selections_date on public.auto_selections(publish_date des
 - 테스트 실행: 어제 후보 풀로 mock 호출 → 결과 미리보기 (실제 promote는 안 함)
 
 ### 7-6. 관리자 페이지 띄워두지 않아도 자동 동작
-**핵심**: 관리자 페이지는 단지 **결과 조회 + 수동 override + 프롬프트 편집** UI일 뿐. 실제 자동 선정은 **Supabase 서버 측 pg_cron + Edge Function** 가 담당하므로 관리자가 접속 안 해도 매일 동작.
+**핵심**: 관리자 페이지는 **랭킹 검토 + 수동 선정 + override + 프롬프트 편집** UI. 실제 자동 랭킹/fallback 은 **Supabase pg_cron + Edge Function** 이 담당.
 
-→ 관리자가 출장가도 OK. 결과 마음에 안 들면 다음날 페이지 접속해서 수동 override.
+- 운영자 출근 전 (KST 00:00 ~ 07:00) 랭킹 산출 완료 → 운영자가 검토 후 1건 선택
+- 미접속/휴무 시 KST 07:00 fallback 이 1순위 자동 발행 → 컨텐츠 공백 방지
+- 결과 마음에 안 들면 당일 RankingsPage에서 다른 순위로 수동 override
 
 ---
 
@@ -420,27 +566,30 @@ GitHub Pages는 SPA fallback 미지원이라 새로고침 시 404. 해결:
 ## 10. Phase별 구현 체크리스트
 
 ### Phase 1
-- [ ] 신규 마이그레이션 — `admin_list_today_candidates` RPC 추가
+- [ ] 신규 마이그레이션 — `admin_moderation_actions` 테이블 + RPC 4종 (`admin_list_today_candidates`, `admin_list_votes`, `admin_soft_delete_vote`, `admin_list_reported_votes`, `admin_get_vote_reports`, `admin_restore_vote`)
 - [ ] verdict-admin 프로젝트 초기화 (Vite + React + TS)
 - [ ] Supabase 클라이언트 + AuthGuard
 - [ ] LoginPage (magic link)
-- [ ] CandidatesPage — 카테고리별 후보 그룹핑 + 단일 선택 + 일괄 발행
-- [ ] DashboardPage — 어제 발행 결과 요약 + 비즈월렛 잔액 (수동 입력)
+- [ ] VotesPage — 카테고리별 일반투표 검색/필터/soft delete
+- [ ] ReportsPage — 신고 큐(아코디언) + 반려/유지 처리
+- [ ] CandidatesPage — 카테고리별 후보 그룹핑 + 단일 선택 + 발행
+- [ ] DashboardPage — 어제 발행 결과 요약 + 신고 미처리 카운트 + 비즈월렛 잔액 (수동 입력)
 - [ ] GitHub Pages 배포 워크플로
 - [ ] 첫 관리자 계정 `is_admin=true` 부여 + 동작 확인
 
 ### Phase 2
-- [ ] 신규 마이그레이션 — `admin_prompts`, `auto_selections` 테이블
-- [ ] Edge Function `auto-select-today` — 후보 풀 평가 + OpenAI 호출 + promote
-- [ ] pg_cron 등록 (KST 07:30)
-- [ ] SelectionsPage — auto_selections 조회 + 수동 override
-- [ ] PromptsPage — system/user prompt 편집 + 미리보기
-- [ ] 모니터링 — 어제 자동 선정 누락 시 운영자 알림
+- [ ] 신규 마이그레이션 — `admin_prompts`, `today_rankings`, `auto_selections` 테이블 + `auto_promote_from_rankings` RPC
+- [ ] Edge Function `auto-rank-today` — 후보 풀 OpenAI 평가 + top 5 캐시
+- [ ] Edge Function `auto-select-fallback` — `today_rankings` 1순위 자동 promote
+- [ ] pg_cron 등록 — KST 00:00 (랭킹) + KST 07:00 (fallback)
+- [ ] RankingsPage — top 5 카드 + 발행 + override
+- [ ] PromptsPage — system/user prompt 편집 + 미리보기 (mock 실행)
+- [ ] 모니터링 — fallback 발동 시 운영자 알림 (Slack/이메일)
 
 ### Phase 3 (참고)
-- [ ] ModerationPage — 검열 반려 / 신고 처리
 - [ ] MetricsPage — 일/주/월 토스포인트 지급 / 광고 환급 / 반려율 통계
 - [ ] 비즈월렛 잔액 자동 동기화 (토스 API)
+- [ ] 어뷰저 `report_weight` 조정 도구
 
 ---
 
@@ -473,13 +622,13 @@ GitHub Pages는 SPA fallback 미지원이라 새로고침 시 404. 해결:
 
 ## 13. 다음 단계
 
-1. 검수 대기 동안 **Phase 1 구현 시작**
-2. **`admin_list_today_candidates` RPC 마이그레이션** 우선 추가 (`20260504000010`)
-3. verdict-admin 레포 초기화 + 기본 라우팅 + AuthGuard
-4. CandidatesPage 핵심 흐름 구현 (조회 → 선택 → 발행)
-5. 검수 통과 + 토스 매핑 INSERT 시점에 베타 시작
-6. 베타 1주차 데이터 보고 Phase 2 (자동 선정) 착수 여부 결정
+1. **Phase 1 마이그레이션 작성** — `20260506000001_admin_phase1.sql` (테이블 + RPC 6종)
+2. verdict-admin 레포 초기화 + 기본 라우팅 + AuthGuard
+3. VotesPage / ReportsPage / CandidatesPage 핵심 흐름 구현
+4. 검수 통과 + 토스 매핑 INSERT 시점에 베타 시작
+5. 베타 1주차 데이터 보고 Phase 2 (자동 랭킹) 착수 여부 결정
 
 ---
 
-*문서 버전: v0.1 (초안) | 작성: 2026-05-04*
+*문서 버전: v0.2 | 작성: 2026-05-04 / 갱신: 2026-05-05*
+*v0.2 변경: VotesPage/ReportsPage 추가, 자동 선정을 자동 랭킹+수동 선정+KST 07:00 fallback 모델로 전환, 신규 RPC/테이블 명세 갱신*

@@ -85,6 +85,7 @@ type VoteWithOptionsRow = {
   status: "pending_review" | "active" | "closed" | "blinded" | "deleted";
   closed_at: string;
   participants_count: number;
+  author_id: string;
   vote_options: { id: string; option_text: string; display_order: number }[];
 };
 
@@ -181,7 +182,7 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
         supabase
           .from("votes")
           .select(
-            "id, category, question, type, status, closed_at, participants_count, vote_options(id, option_text, display_order)"
+            "id, category, question, type, status, closed_at, participants_count, author_id, vote_options(id, option_text, display_order)"
           )
           .in("id", voteIds),
         supabase.rpc("get_vote_results", { p_vote_ids: voteIds }),
@@ -206,6 +207,8 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
       .map((c) => {
         const v = voteById.get(c.vote_id);
         if (!v) return null;
+        // 본인이 작성한 투표는 "내가 올린 투표" 섹션에 노출되므로 참여 목록에서 제외
+        if (v.author_id === userId) return null;
         const ui = DB_TO_UI[v.category];
         if (ui === undefined) return null;
 

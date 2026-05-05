@@ -50,10 +50,11 @@ type VoteRow = {
   closed_at: string;
   today_published_date: string | null;
   participants_count: number;
+  author_id: string;
 };
 
 const VOTE_COLS =
-  "id, category, status, type, question, started_at, closed_at, today_published_date, participants_count";
+  "id, category, status, type, question, started_at, closed_at, today_published_date, participants_count, author_id";
 
 type OptionRow = {
   id: string;
@@ -373,6 +374,7 @@ export type VoteDetailResult = {
   detail: VoteDetail;
   myOptionId: string | null;
   hasUnlock: boolean;
+  isAuthor: boolean;
 };
 
 export async function fetchVoteDetail(id: string): Promise<VoteDetailResult | null> {
@@ -417,6 +419,7 @@ export async function fetchVoteDetail(id: string): Promise<VoteDetailResult | nu
     },
     myOptionId,
     hasUnlock: unlocks.has(row.id),
+    isAuthor: userId !== null && row.author_id === userId,
   };
 }
 

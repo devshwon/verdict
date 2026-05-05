@@ -110,7 +110,9 @@ export function HomeFeed() {
         showsTodayCard
           ? fetchTodayVote(cat as Exclude<CategoryKey, "all" | "etc">)
           : Promise.resolve(null),
-        fetchPastTodayVotes(cat),
+        // "전체" 탭에서는 다른 카테고리의 지난 오늘의 투표를 묶어 보여주지 않음
+        // (오늘의 투표는 카테고리 큐레이션 컨셉이라, 카테고리 탭에서만 노출)
+        cat === "all" ? Promise.resolve([]) : fetchPastTodayVotes(cat),
         getDailyMissions().catch((e) => {
           console.error("[HomeFeed] missions load failed:", e);
           return null;
