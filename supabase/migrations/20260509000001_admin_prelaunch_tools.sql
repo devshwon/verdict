@@ -137,6 +137,26 @@ JSON으로만 응답:
 on conflict (key) do nothing;
 
 -- ============================================================================
+-- 3-pre. votes.duration_minutes CHECK 정정 — today_vote(1440) 허용
+-- ----------------------------------------------------------------------------
+-- 현재 CHECK: in (5, 10, 30, 60) — 사용자 register_vote 옵션과 일치 (20260504000002).
+-- 그러나 promote_today_candidates / admin_create_today_vote 는
+-- type='today' 발행 시 duration_minutes=1440 (24h, 자정~자정)을 강제 세팅하므로
+-- CHECK 가 1440 을 막아 INSERT/UPDATE 실패 (선재 버그).
+--
+-- 정정: (5, 10, 30, 60, 1440) — 사용자 옵션 4종 + today 전용 1440.
+-- 360 은 미사용이므로 영구 제거.
+-- admin_create_normal_vote 는 RPC 자체 검증으로 5/10/30/60 만 허용.
+-- ============================================================================
+
+alter table public.votes
+  drop constraint if exists votes_duration_minutes_check;
+
+alter table public.votes
+  add constraint votes_duration_minutes_check
+  check (duration_minutes in (5, 10, 30, 60, 1440));
+
+-- ============================================================================
 -- 3. admin_moderation_actions.action CHECK 확장
 -- ============================================================================
 
@@ -257,8 +277,8 @@ begin
   ) <> v_opt_count then
     raise exception 'duplicate option text' using errcode = '23514';
   end if;
-  if p_duration_minutes not in (10, 30, 60, 360, 1440) then
-    raise exception 'invalid duration (allowed: 10/30/60/360/1440)' using errcode = '23514';
+  if p_duration_minutes not in (5, 10, 30, 60) then
+    raise exception 'invalid duration (admin allowed: 5/10/30/60)' using errcode = '23514';
   end if;
   if p_category not in ('daily', 'relationship', 'work', 'game', 'etc') then
     raise exception 'invalid category' using errcode = '23514';
