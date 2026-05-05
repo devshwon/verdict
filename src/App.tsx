@@ -1,20 +1,53 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
+import { RouteFallback } from "./components/RouteFallback";
 import { AuthGate } from "./features/auth/AuthGate";
 import { HomeFeed } from "./features/home/HomeFeed";
-import { MyPage } from "./features/mypage/MyPage";
-import { RegisterScreen } from "./features/register/RegisterScreen";
-import { VoteDetail } from "./features/vote-detail/VoteDetail";
+import { useTossBanner } from "./lib/ads";
+import { UnlockProvider } from "./features/today-archive/UnlockContext";
+import { UnlockErrorToast } from "./features/today-archive/UnlockErrorToast";
 import "./App.css";
 
+const TodayArchive = lazy(() =>
+  import("./features/today-archive/TodayArchive").then((m) => ({
+    default: m.TodayArchive,
+  }))
+);
+const VoteDetail = lazy(() =>
+  import("./features/vote-detail/VoteDetail").then((m) => ({
+    default: m.VoteDetail,
+  }))
+);
+const RegisterScreen = lazy(() =>
+  import("./features/register/RegisterScreen").then((m) => ({
+    default: m.RegisterScreen,
+  }))
+);
+const MyPage = lazy(() =>
+  import("./features/mypage/MyPage").then((m) => ({ default: m.MyPage }))
+);
+const NotFound = lazy(() =>
+  import("./features/not-found/NotFound").then((m) => ({ default: m.NotFound }))
+);
+
 function App() {
+  useTossBanner();
+
   return (
     <AuthGate>
-      <Routes>
-        <Route path="/" element={<HomeFeed />} />
-        <Route path="/vote/:id" element={<VoteDetail />} />
-        <Route path="/register" element={<RegisterScreen />} />
-        <Route path="/mypage" element={<MyPage />} />
-      </Routes>
+      <UnlockProvider>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<HomeFeed />} />
+            <Route path="/today/archive" element={<TodayArchive />} />
+            <Route path="/vote/:id" element={<VoteDetail />} />
+            <Route path="/register" element={<RegisterScreen />} />
+            <Route path="/mypage" element={<MyPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+        <UnlockErrorToast />
+      </UnlockProvider>
     </AuthGate>
   );
 }

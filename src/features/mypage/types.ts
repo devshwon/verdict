@@ -11,7 +11,7 @@ export type MyStats = {
   featured: number;
 };
 
-export type MyVoteStatus = "ongoing" | "closed";
+export type MyVoteStatus = "ongoing" | "closed" | "pending_review" | "blinded";
 
 export type MyVote = {
   id: string;
@@ -20,6 +20,7 @@ export type MyVote = {
   participants: number;
   status: MyVoteStatus;
   remainingLabel?: string;
+  rejectionReason?: string | null;
 };
 
 export type ParticipatedVote = {

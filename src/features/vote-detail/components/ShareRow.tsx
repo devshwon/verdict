@@ -6,7 +6,9 @@ import {
   spacing,
 } from "../../../design/tokens";
 
-type Channel = "kakao" | "instagram" | "url";
+// 카카오톡/인스타그램 공유는 추후 지원 예정 — 현재는 토스 공유 링크 복사만 노출
+type Channel = "url";
+// type Channel = "kakao" | "instagram" | "url";
 
 type Props = {
   pendingChannel?: Channel | null;
@@ -14,9 +16,9 @@ type Props = {
 };
 
 const channels: { key: Channel; label: string; ready: boolean }[] = [
-  { key: "kakao", label: "카카오톡", ready: false },
-  { key: "instagram", label: "인스타그램", ready: false },
-  { key: "url", label: "URL 복사", ready: true },
+  // { key: "kakao", label: "카카오톡", ready: false },
+  // { key: "instagram", label: "인스타그램", ready: false },
+  { key: "url", label: "링크 복사", ready: true },
 ];
 
 export function ShareRow({ pendingChannel, onShare }: Props) {

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
 import { SectionTitle } from "../../../components/SectionTitle";
 import {
@@ -61,6 +62,7 @@ export function ParticipatedSection({ votes }: Props) {
 }
 
 function Row({ vote }: { vote: ParticipatedVote }) {
+  const navigate = useNavigate();
   const cat = categoryColors[vote.category];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
@@ -70,6 +72,15 @@ function Row({ vote }: { vote: ParticipatedVote }) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(`/vote/${vote.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/vote/${vote.id}`);
+        }
+      }}
       style={{
         padding: spacing.md,
         borderRadius: radius.md,
@@ -78,6 +89,7 @@ function Row({ vote }: { vote: ParticipatedVote }) {
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: "pointer",
       }}
     >
       <div

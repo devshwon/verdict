@@ -33,9 +33,9 @@
 - "투표 후" 결과 바 노출 조건은 추후 전역 vote-state 연동 (N3)과 함께. 이 패킷에서는 `vote.showResultBar` 기준 유지
 
 **DoD**
-- [ ] FeedCard 내 인라인 투표 버튼/확정 UI 제거
-- [ ] 카드 어느 영역을 탭해도 `/vote/:id`로 이동
-- [ ] 토큰 외 하드코딩 px 0, lint/타입 무결
+- [x] FeedCard 내 인라인 투표 버튼/확정 UI 제거
+- [x] 카드 어느 영역을 탭해도 `/vote/:id`로 이동
+- [x] 토큰 외 하드코딩 px 0, lint/타입 무결
 
 ---
 
@@ -49,9 +49,9 @@
 - 상세에서 뒤로가기 시 동일 카테고리 + 비슷한 위치로 복귀
 
 **DoD**
-- [ ] 카테고리 변경 후 카드 → 상세 → 뒤로가기 시 카테고리 유지
-- [ ] 스크롤 위치가 마지막 본 카드 근처로 복원
-- [ ] 새로고침 케이스에서도 깨지지 않음
+- [x] 카테고리 변경 후 카드 → 상세 → 뒤로가기 시 카테고리 유지 (sessionStorage `home_feed_active`)
+- [x] 스크롤 위치가 마지막 본 카드 근처로 복원 (sessionStorage `home_feed_scroll`, 첫 마운트 첫 ready 시 1회 복원)
+- [x] 새로고침 케이스에서도 깨지지 않음 (try/catch로 storage 비활성 환경 fallback, VALID_CATEGORIES 화이트리스트 검증)
 
 ---
 
@@ -66,9 +66,9 @@
 - 마감된 투표 vs 진행중 투표의 시각적 구분
 
 **DoD**
-- [ ] 미투표 상세 → 옵션 선택 → 결과 노출까지 매끄럽게 연결
-- [ ] 상세에서 투표 후 홈 복귀 시 해당 카드가 결과 모드로 전환
-- [ ] 마감된 투표는 진입 시 즉시 결과 노출
+- [x] 미투표 상세 → 옵션 선택 → 결과 노출까지 매끄럽게 연결 (castVote + minDelay + load 병렬 → 셋 다 끝난 후 result phase)
+- [x] 상세에서 투표 후 홈 복귀 시 해당 카드가 결과 모드로 전환 (`src/lib/voteCache.ts` overlay)
+- [x] 마감된 투표는 진입 시 즉시 결과 노출 (기존 phase 분기 + 결과 phase 상단 "최종 결과" 라벨로 시각 구분)
 
 **의존:** N1 (FeedCard 정합성 정리 후 진행 권장)
 
@@ -84,9 +84,9 @@
 - 실기기 (iPhone / Android Toss in-app) 확인
 
 **DoD**
-- [ ] iOS 노치/홈인디케이터 영역에서 BottomNav가 자연스럽게 위로 떠 있음
-- [ ] 등록 화면에서 키보드 올라올 때 BottomNav가 입력을 가리지 않음
-- [ ] safe-area 미지원 기기에서 레이아웃 깨짐 없음
+- [x] iOS 노치/홈인디케이터 영역에서 BottomNav가 자연스럽게 위로 떠 있음 (`paddingBottom: calc(spacing.sm + env(safe-area-inset-bottom))` — 기존 `min(safe, md)` 캡 제거)
+- [x] 등록 화면에서 키보드 올라올 때 BottomNav가 입력을 가리지 않음 (`useKeyboardOpen` hook으로 visualViewport delta > 150px 감지 → BottomNav 언마운트). SubmitBar는 safe-area-inset 자체 padding으로 home indicator 회피
+- [x] safe-area 미지원 기기에서 레이아웃 깨짐 없음 (`env()` 미지원 시 0 → 최소 sm padding 유지)
 
 ---
 

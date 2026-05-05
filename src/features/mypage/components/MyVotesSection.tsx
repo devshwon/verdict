@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
 import { SectionTitle } from "../../../components/SectionTitle";
 import {
@@ -19,12 +20,27 @@ type Props = {
   votes: MyVote[];
 };
 
+type TabKey = "ongoing" | "closed" | "review";
+
 export function MyVotesSection({ votes }: Props) {
-  const [tab, setTab] = useState<MyVoteStatus>("ongoing");
+  const [tab, setTab] = useState<TabKey>("ongoing");
 
   const filtered = useMemo(
-    () => votes.filter((v) => v.status === tab),
+    () =>
+      votes.filter((v) => {
+        if (tab === "ongoing") return v.status === "ongoing";
+        if (tab === "closed") return v.status === "closed";
+        return v.status === "pending_review" || v.status === "blinded";
+      }),
     [votes, tab],
+  );
+
+  const reviewCount = useMemo(
+    () =>
+      votes.filter(
+        (v) => v.status === "pending_review" || v.status === "blinded",
+      ).length,
+    [votes],
   );
 
   return (
@@ -37,13 +53,15 @@ export function MyVotesSection({ votes }: Props) {
       }}
     >
       <SectionTitle>내가 올린 투표</SectionTitle>
-      <Segmented active={tab} onChange={setTab} />
+      <Segmented active={tab} onChange={setTab} reviewCount={reviewCount} />
       {filtered.length === 0 ? (
         <Empty
           message={
             tab === "ongoing"
               ? "진행 중인 투표가 없어요."
-              : "마감된 투표가 없어요."
+              : tab === "closed"
+                ? "마감된 투표가 없어요."
+                : "심사 중이거나 반려된 투표가 없어요."
           }
         />
       ) : (
@@ -66,13 +84,19 @@ export function MyVotesSection({ votes }: Props) {
 function Segmented({
   active,
   onChange,
+  reviewCount,
 }: {
-  active: MyVoteStatus;
-  onChange: (s: MyVoteStatus) => void;
+  active: TabKey;
+  onChange: (s: TabKey) => void;
+  reviewCount: number;
 }) {
-  const items: { key: MyVoteStatus; label: string }[] = [
+  const items: { key: TabKey; label: string }[] = [
     { key: "ongoing", label: "진행중" },
     { key: "closed", label: "마감" },
+    {
+      key: "review",
+      label: reviewCount > 0 ? `심사·반려 ${reviewCount}` : "심사·반려",
+    },
   ];
   return (
     <div
@@ -112,14 +136,48 @@ function Segmented({
   );
 }
 
+function statusLabel(status: MyVoteStatus): {
+  label: string;
+  color: string;
+  bg: string;
+} {
+  switch (status) {
+    case "pending_review":
+      return { label: "심사 중", bg: "#FAEEDA", color: "#633806" };
+    case "blinded":
+      return { label: "반려", bg: "#FBE9E7", color: "#712B13" };
+    case "closed":
+      return { label: "마감", bg: palette.divider, color: palette.textTertiary };
+    default:
+      return { label: "진행중", bg: palette.brandSurface, color: palette.brandText };
+  }
+}
+
 function Row({ vote }: { vote: MyVote }) {
+  const navigate = useNavigate();
   const cat = categoryColors[vote.category];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
   const isOngoing = vote.status === "ongoing";
+  const sLabel = statusLabel(vote.status);
+  // 심사 중/반려는 상세가 fetchVoteDetail의 status 필터(active|closed)에 걸려 NotFound 처리되므로 진입 차단
+  const canOpen = vote.status === "ongoing" || vote.status === "closed";
 
   return (
     <div
+      role={canOpen ? "button" : undefined}
+      tabIndex={canOpen ? 0 : undefined}
+      onClick={canOpen ? () => navigate(`/vote/${vote.id}`) : undefined}
+      onKeyDown={
+        canOpen
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(`/vote/${vote.id}`);
+              }
+            }
+          : undefined
+      }
       style={{
         padding: spacing.md,
         borderRadius: radius.md,
@@ -128,6 +186,7 @@ function Row({ vote }: { vote: MyVote }) {
         display: "flex",
         flexDirection: "column",
         gap: spacing.sm,
+        cursor: canOpen ? "pointer" : "default",
       }}
     >
       <div
@@ -140,6 +199,9 @@ function Row({ vote }: { vote: MyVote }) {
         <Pill bg={cat.surface} fg={cat.text}>
           {categoryLabel}
         </Pill>
+        <Pill bg={sLabel.bg} fg={sLabel.color}>
+          {sLabel.label}
+        </Pill>
         <span
           style={{
             marginLeft: "auto",
@@ -148,7 +210,7 @@ function Row({ vote }: { vote: MyVote }) {
             color: isOngoing ? cat.bar : palette.textTertiary,
           }}
         >
-          {isOngoing ? vote.remainingLabel ?? "" : "마감"}
+          {isOngoing ? vote.remainingLabel ?? "" : ""}
         </span>
       </div>
       <div
@@ -161,6 +223,20 @@ function Row({ vote }: { vote: MyVote }) {
       >
         {vote.question}
       </div>
+      {vote.status === "blinded" && vote.rejectionReason ? (
+        <div
+          style={{
+            padding: spacing.sm,
+            borderRadius: radius.sm,
+            background: "#FBE9E7",
+            color: "#712B13",
+            fontSize: fontSize.small,
+            lineHeight: lineHeight.body,
+          }}
+        >
+          반려 사유: {vote.rejectionReason}
+        </div>
+      ) : null}
       <span
         style={{
           fontSize: fontSize.small,

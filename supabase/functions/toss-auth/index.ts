@@ -153,13 +153,67 @@ function extractUserKey(info: Record<string, unknown>): string | null {
 }
 
 function extractGender(info: Record<string, unknown>): 'M' | 'F' | 'undisclosed' {
-  const g = info.gender ?? info.sex
-  if (typeof g === 'string') {
-    const norm = g.toUpperCase()
-    if (norm === 'MALE' || norm === 'M') return 'M'
-    if (norm === 'FEMALE' || norm === 'F') return 'F'
+  // 토스 응답 키 후보: gender / sex / genderCode / GENDER (운영 응답에 따라 조정)
+  const candidates = ['gender', 'sex', 'genderCode', 'GENDER']
+  for (const k of candidates) {
+    const v = info[k]
+    if (typeof v === 'string') {
+      const norm = v.toUpperCase()
+      if (norm === 'MALE' || norm === 'M' || norm === '1') return 'M'
+      if (norm === 'FEMALE' || norm === 'F' || norm === '2') return 'F'
+    }
+    if (typeof v === 'number') {
+      if (v === 1) return 'M'
+      if (v === 2) return 'F'
+    }
   }
   return 'undisclosed'
+}
+
+function extractAgeBucket(info: Record<string, unknown>): 'age_20s' | 'age_30s' | 'age_40plus' | 'undisclosed' {
+  // 토스 응답 키 후보: birthday(YYYY-MM-DD) / birthDate / birthYear / dateOfBirth / age
+  // 일부 응답은 만나이(age) 정수로 옴
+  const ageCandidates = ['age', 'currentAge']
+  for (const k of ageCandidates) {
+    const v = info[k]
+    if (typeof v === 'number' && v > 0 && v < 150) return ageToBucket(v)
+    if (typeof v === 'string' && /^\d+$/.test(v)) return ageToBucket(parseInt(v, 10))
+  }
+
+  // birthday/birthYear 추출 → 만나이 계산
+  const birthYearCandidates = ['birthYear', 'birthYearNumber']
+  for (const k of birthYearCandidates) {
+    const v = info[k]
+    if (typeof v === 'number' && v >= 1900 && v <= 2100) return birthYearToBucket(v)
+    if (typeof v === 'string' && /^\d{4}$/.test(v)) return birthYearToBucket(parseInt(v, 10))
+  }
+
+  const birthdayCandidates = ['birthday', 'birthDate', 'dateOfBirth', 'BIRTHDAY']
+  for (const k of birthdayCandidates) {
+    const v = info[k]
+    if (typeof v === 'string') {
+      // YYYY-MM-DD / YYYYMMDD / YYYY/MM/DD 모두 지원
+      const m = v.match(/^(\d{4})/)
+      if (m) {
+        const year = parseInt(m[1], 10)
+        if (year >= 1900 && year <= 2100) return birthYearToBucket(year)
+      }
+    }
+  }
+
+  return 'undisclosed'
+}
+
+function ageToBucket(age: number): 'age_20s' | 'age_30s' | 'age_40plus' | 'undisclosed' {
+  if (age < 20) return 'undisclosed' // 미성년 보호 — 광고/보상 정책 §13-4
+  if (age < 30) return 'age_20s'
+  if (age < 40) return 'age_30s'
+  return 'age_40plus'
+}
+
+function birthYearToBucket(year: number): 'age_20s' | 'age_30s' | 'age_40plus' | 'undisclosed' {
+  const now = new Date()
+  return ageToBucket(now.getFullYear() - year)
 }
 
 Deno.serve(async (req) => {
@@ -211,10 +265,13 @@ Deno.serve(async (req) => {
       )
     }
     const gender = extractGender(userInfo)
-    // birthday 복호화는 미구현 — TODO
-    const ageBucket: 'undisclosed' | 'age_20s' | 'age_30s' | 'age_40plus' = 'undisclosed'
+    const ageBucket = extractAgeBucket(userInfo)
+    // 운영 디버깅용 — 응답에 어떤 키가 있었는지 / 추출 결과 로그
+    console.log(`[toss-auth] demographics extracted gender=${gender} ageBucket=${ageBucket}`)
 
     // 3) 사용자 upsert (auth.users + public.users)
+    //    raw 컬럼에 토스 원본값 저장. effective(gender/age_bucket)는
+    //    20260504000006 마이그레이션의 트리거가 *_public 플래그로 자동 동기화
     const syntheticEmail = `toss_${userKey}@${SYNTHETIC_EMAIL_DOMAIN}`
 
     const { data: existing, error: lookupErr } = await admin
@@ -227,10 +284,12 @@ Deno.serve(async (req) => {
     let userId: string
     if (existing) {
       userId = existing.id
-      // demographics 동기화 (값 바뀐 경우 반영)
       const { error: updErr } = await admin
         .from('users')
-        .update({ gender, age_bucket: ageBucket })
+        .update({
+          gender_raw: gender,
+          age_bucket_raw: ageBucket,
+        })
         .eq('id', userId)
       if (updErr) throw updErr
     } else {
@@ -245,8 +304,8 @@ Deno.serve(async (req) => {
       const { error: insErr } = await admin.from('users').insert({
         id: userId,
         toss_user_key: userKey,
-        gender,
-        age_bucket: ageBucket,
+        gender_raw: gender,
+        age_bucket_raw: ageBucket,
       })
       if (insErr) throw insErr
     }

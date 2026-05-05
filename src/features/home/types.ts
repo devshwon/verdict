@@ -24,3 +24,12 @@ export type TodayVote = {
   participants: number;
   remainingLabel: string;
 };
+
+export type PastTodayVote = {
+  id: string;
+  category: Exclude<CategoryKey, "all" | "etc">;
+  question: string;
+  participants: number;
+  endedAt: string;
+  unlocked: boolean;
+};

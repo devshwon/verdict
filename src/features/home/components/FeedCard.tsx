@@ -1,5 +1,4 @@
-import { Button } from "@toss/tds-mobile";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
 import {
@@ -30,10 +29,6 @@ export function FeedCard({ vote }: Props) {
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
 
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [voted, setVoted] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-
   const goDetail = () => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
@@ -45,21 +40,6 @@ export function FeedCard({ vote }: Props) {
       e.preventDefault();
       goDetail();
     }
-  };
-
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
-
-  const showResults = vote.showResultBar || voted;
-  const pendingOption =
-    pendingId !== null
-      ? vote.options.find((o) => o.id === pendingId) ?? null
-      : null;
-
-  const confirmVote = () => {
-    if (confirming || voted || pendingId === null) return;
-    setConfirming(true);
-    setVoted(true);
-    setPendingId(null);
   };
 
   return (
@@ -117,21 +97,10 @@ export function FeedCard({ vote }: Props) {
         “{vote.question}”
       </div>
 
-      {showResults ? (
+      {vote.showResultBar ? (
         <div
           style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}
         >
-          {voted ? (
-            <span
-              style={{
-                fontSize: fontSize.small,
-                fontWeight: fontWeight.medium,
-                color: cat.bar,
-              }}
-            >
-              참여 완료
-            </span>
-          ) : null}
           {vote.options.map((opt) => (
             <ResultBar
               key={opt.id}
@@ -140,92 +109,7 @@ export function FeedCard({ vote }: Props) {
             />
           ))}
         </div>
-      ) : (
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}
-        >
-          <div style={{ display: "flex", gap: spacing.sm }}>
-            {vote.options.map((opt) => {
-              const isPending = pendingId === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={confirming}
-                  onClick={(e) => {
-                    stop(e);
-                    if (confirming) return;
-                    setPendingId((prev) => (prev === opt.id ? null : opt.id));
-                  }}
-                  aria-pressed={isPending}
-                  style={{
-                    flex: 1,
-                    padding: `${spacing.md}px 0`,
-                    borderRadius: radius.md,
-                    border: `${borderWidth.hairline}px solid ${
-                      isPending ? cat.bar : palette.border
-                    }`,
-                    background: isPending ? cat.surface : palette.surface,
-                    color: isPending ? cat.text : palette.textPrimary,
-                    fontSize: fontSize.body,
-                    fontWeight: fontWeight.medium,
-                    cursor: confirming ? "default" : "pointer",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {pendingOption ? (
-            <div
-              style={{
-                padding: `${spacing.sm}px ${spacing.md}px`,
-                borderRadius: radius.md,
-                background: cat.surface,
-                display: "flex",
-                alignItems: "center",
-                gap: spacing.sm,
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: fontSize.label,
-                  fontWeight: fontWeight.medium,
-                  color: cat.text,
-                  lineHeight: lineHeight.tight,
-                }}
-              >
-                ‘{pendingOption.label}’(으)로 투표할까요?
-              </span>
-              <div onClick={stop}>
-                <Button
-                  size="small"
-                  variant="weak"
-                  color="dark"
-                  disabled={confirming}
-                  onClick={() => setPendingId(null)}
-                >
-                  취소
-                </Button>
-              </div>
-              <div onClick={stop}>
-                <Button
-                  size="small"
-                  variant="fill"
-                  color="primary"
-                  disabled={confirming}
-                  onClick={confirmVote}
-                >
-                  확정
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
