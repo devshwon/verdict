@@ -14,6 +14,7 @@ import {
   MAX_CHOICES,
   MIN_CHOICES,
   QUESTION_MAX_LENGTH,
+  QUESTION_MIN_LENGTH,
   type Choice,
   type DurationKey,
   type FieldKey,
@@ -37,10 +38,13 @@ function buildPayload(
   duration: DurationKey,
   todayCandidate: boolean,
 ): RegisterPayload | null {
+  const trimmedQuestion = question.trim();
+  const dedupOptions = new Set(filledChoices.map((c) => c.toLowerCase()));
   if (
-    question.trim().length === 0 ||
-    question.length > QUESTION_MAX_LENGTH ||
+    trimmedQuestion.length < QUESTION_MIN_LENGTH ||
+    trimmedQuestion.length > QUESTION_MAX_LENGTH ||
     filledChoices.length < MIN_CHOICES ||
+    dedupOptions.size !== filledChoices.length ||
     category === null
   ) {
     return null;
@@ -124,17 +128,25 @@ export function useRegisterForm(options: Options = {}) {
 
   const errors: RegisterErrors = useMemo(() => {
     const e: RegisterErrors = {};
-    if (question.trim().length === 0) {
+    const trimmed = question.trim();
+    if (trimmed.length === 0) {
       e.question = "질문을 입력해주세요.";
+    } else if (trimmed.length < QUESTION_MIN_LENGTH) {
+      e.question = `질문을 ${QUESTION_MIN_LENGTH}자 이상 입력해주세요.`;
     }
     if (filledChoices.length < MIN_CHOICES) {
       e.choices = `선택지를 ${MIN_CHOICES}개 이상 입력해주세요.`;
+    } else if (
+      new Set(filledChoices.map((c) => c.toLowerCase())).size !==
+      filledChoices.length
+    ) {
+      e.choices = "선택지는 서로 다르게 입력해주세요.";
     }
     if (category === null) {
       e.category = "카테고리를 선택해주세요.";
     }
     return e;
-  }, [question, filledChoices.length, category]);
+  }, [question, filledChoices, category]);
 
   const visibleErrors: RegisterErrors = useMemo(() => {
     const v: RegisterErrors = {};

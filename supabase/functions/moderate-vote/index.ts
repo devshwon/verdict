@@ -75,21 +75,11 @@ interface OptionRow {
 }
 
 // 사전 휴리스틱 (OpenAI 호출 전 1차 필터, 비용 0)
-//   - 길이 부족 / 의미 없는 반복 문자 / 자기 동일 질문 도배 같은 명백한 케이스 컷
+//   - 클라이언트 폼이 동일 검증을 먼저 수행하지만, RPC 직접 호출 등을 막는 안전망으로 유지
+//   - 정책: 4자 미만 질문, 선택지 중복만 컷. 반복문자/패턴은 정상 질문도 막을 수 있어 사후 모더레이션(신고)에 위임
 function preScreen(question: string, options: string[]): string | null {
   const q = question.trim()
-  if (q.length < 4) return '질문이 너무 짧아요'
-
-  // 같은 문자 반복 50% 초과 (예: "ㅋㅋㅋㅋㅋㅋㅋㅋ", "ㅁㄴㅇㄹㅁㄴㅇㄹ")
-  const charCount = new Map<string, number>()
-  for (const ch of q.replace(/\s/g, '')) {
-    charCount.set(ch, (charCount.get(ch) ?? 0) + 1)
-  }
-  const total = [...charCount.values()].reduce((s, n) => s + n, 0)
-  const maxCount = Math.max(...charCount.values())
-  if (total >= 4 && maxCount / total > 0.6) {
-    return '의미 없는 반복 문자가 포함돼 있어요'
-  }
+  if (q.length < 4) return '질문은 4자 이상 입력해주세요'
 
   // 선택지 중복
   const opts = options.map((o) => o.trim().toLowerCase())

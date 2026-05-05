@@ -18,6 +18,7 @@ import { ClaimRewardsCard } from "./components/ClaimRewardsCard";
 import { DailyMissionCard } from "./components/DailyMissionCard";
 import { DemographicsCard } from "./components/DemographicsCard";
 import { FreePassCard } from "./components/FreePassCard";
+import { InquiryCard } from "./components/InquiryCard";
 import { MyVotesSection } from "./components/MyVotesSection";
 import { ParticipatedSection } from "./components/ParticipatedSection";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -117,6 +118,10 @@ export function MyPage() {
           />
           <MyVotesSection votes={data.myVotes} />
           <ParticipatedSection votes={data.participatedVotes} />
+          <InquiryCard
+            onSubmitted={() => setToast("문의가 접수됐어요. 감사합니다!")}
+            onError={(msg) => setToast(msg)}
+          />
         </>
       )}
 

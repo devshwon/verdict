@@ -11,6 +11,7 @@ export const durations: { key: DurationKey; label: string }[] = [
   { key: "h1", label: "1시간" },
 ];
 
+export const QUESTION_MIN_LENGTH = 4;
 export const QUESTION_MAX_LENGTH = 60;
 export const CHOICE_MAX_LENGTH = 30;
 export const MIN_CHOICES = 2;

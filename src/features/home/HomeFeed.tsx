@@ -247,7 +247,7 @@ export function HomeFeed() {
       ) : (
         <>
           {today ? <TodayVoteCard vote={today} /> : null}
-          <PastTodayCarousel items={past} />
+          {active !== "all" ? <PastTodayCarousel items={past} /> : null}
           {feed.length === 0 ? (
             <FeedMessage>표시할 투표가 없어요.</FeedMessage>
           ) : (
