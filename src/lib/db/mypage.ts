@@ -117,28 +117,65 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
     now.getTime() - PARTICIPATED_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  // 1) demographics
-  const { data: userRow, error: userErr } = await supabase
-    .from("users")
-    .select("id, gender, age_bucket, gender_public, age_public")
-    .eq("id", userId)
-    .single();
-  if (userErr) throw userErr;
-  const u = userRow as UserRow;
+  // userId 받은 직후 의존 없는 쿼리 6개를 한 라운드트립에 발사
+  const [
+    userRowRes,
+    authoredRes,
+    castRes,
+    createdCountRes,
+    participatedCountRes,
+    featuredCountRes,
+  ] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, gender, age_bucket, gender_public, age_public")
+      .eq("id", userId)
+      .single(),
+    supabase
+      .from("votes")
+      .select(
+        "id, category, question, status, type, closed_at, participants_count, today_published_date, rejection_reason, created_at"
+      )
+      .eq("author_id", userId)
+      .gte("created_at", cutoff30d)
+      .order("created_at", { ascending: false })
+      .limit(MY_VOTE_LIMIT),
+    supabase
+      .from("vote_casts")
+      .select("vote_id, option_id, cast_at")
+      .eq("user_id", userId)
+      .gte("cast_at", cutoff30d)
+      .order("cast_at", { ascending: false })
+      .limit(PARTICIPATED_LIMIT),
+    supabase
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", userId)
+      .in("type", ["normal", "today", "today_candidate"]),
+    supabase
+      .from("vote_casts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId),
+    supabase
+      .from("votes")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", userId)
+      .eq("type", "today")
+      .not("today_published_date", "is", null),
+  ]);
 
-  // 2) 내가 올린 투표 (normal + today + today_candidate, 최근 30일치)
-  //    — today_candidate 는 미선정 후보 노출 (§4-4)
-  const { data: authoredRows, error: authoredErr } = await supabase
-    .from("votes")
-    .select(
-      "id, category, question, status, type, closed_at, participants_count, today_published_date, rejection_reason, created_at"
-    )
-    .eq("author_id", userId)
-    .gte("created_at", cutoff30d)
-    .order("created_at", { ascending: false })
-    .limit(MY_VOTE_LIMIT);
-  if (authoredErr) throw authoredErr;
-  const authored = (authoredRows ?? []) as (AuthoredVoteRow & { created_at: string })[];
+  if (userRowRes.error) throw userRowRes.error;
+  if (authoredRes.error) throw authoredRes.error;
+  if (castRes.error) throw castRes.error;
+  if (createdCountRes.error) throw createdCountRes.error;
+  if (participatedCountRes.error) throw participatedCountRes.error;
+  if (featuredCountRes.error) throw featuredCountRes.error;
+
+  const u = userRowRes.data as UserRow;
+  const authored = (authoredRes.data ?? []) as (AuthoredVoteRow & {
+    created_at: string;
+  })[];
+  const casts = (castRes.data ?? []) as ParticipatedJoinRow[];
 
   const myVotes: MyVote[] = authored
     .filter((r) => DB_TO_UI[r.category] !== undefined)
@@ -147,6 +184,7 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
       let myStatus: MyVote["status"];
       if (r.status === "pending_review") myStatus = "pending_review";
       else if (r.status === "blinded") myStatus = "blinded";
+      else if (r.status === "deleted") myStatus = "deleted";
       else if (closed) myStatus = "closed";
       else myStatus = "ongoing";
       return {
@@ -163,17 +201,7 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
       };
     });
 
-  // 3) 참여한 투표 (vote_casts → votes 조인)
-  const { data: castRows, error: castErr } = await supabase
-    .from("vote_casts")
-    .select("vote_id, option_id, cast_at")
-    .eq("user_id", userId)
-    .gte("cast_at", cutoff30d)
-    .order("cast_at", { ascending: false })
-    .limit(PARTICIPATED_LIMIT);
-  if (castErr) throw castErr;
-  const casts = (castRows ?? []) as ParticipatedJoinRow[];
-
+  // 참여한 투표 상세 — casts에 의존하므로 2단계로 분리
   let participatedVotes: ParticipatedVote[] = [];
   if (casts.length > 0) {
     const voteIds = casts.map((c) => c.vote_id);
@@ -249,29 +277,12 @@ export async function fetchMyPageData(): Promise<MyPageData | null> {
       .filter((v): v is ParticipatedVote => v !== null);
   }
 
-  // 4) stats — 내가 올린 / 참여한 / 상단 선정 (today 발행)
+  // stats — 내가 올린 / 참여한 / 상단 선정 (today 발행)
   // created: 마이페이지 노출 기간(30일)과 무관하게 전체 카운트
-  const [
-    { count: createdCount },
-    { count: participatedCount },
-    { count: featuredCount },
-  ] = await Promise.all([
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("author_id", userId)
-      .in("type", ["normal", "today", "today_candidate"]),
-    supabase
-      .from("vote_casts")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId),
-    supabase
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("author_id", userId)
-      .eq("type", "today")
-      .not("today_published_date", "is", null),
-  ]);
+  // (위 Promise.all에서 이미 병렬 발사됨)
+  const createdCount = createdCountRes.count;
+  const participatedCount = participatedCountRes.count;
+  const featuredCount = featuredCountRes.count;
 
   return {
     profile: {

@@ -13,8 +13,9 @@ export function SubmitBar({ disabled, loading, onSubmit, label = "등록하기" 
     <div
       style={{
         padding: spacing.lg,
-        // safe-area-inset 만큼 아래 여백 추가 (키보드 노출 시 BottomNav가 사라져도 home indicator 회피)
-        paddingBottom: `calc(${spacing.lg}px + env(safe-area-inset-bottom))`,
+        // BottomNav가 떠 있을 땐 BottomNav가 safe-area-inset-bottom을 처리하므로
+        // 여기서 더하면 안드로이드 WebView에서 등록 버튼 ↔ 네비 간 여백이 두 배로 누적됨.
+        // 키보드 노출 시엔 키보드 자체가 home indicator를 가리므로 보정 불필요.
         background: palette.background,
         borderTop: `${borderWidth.hairline}px solid ${palette.divider}`,
       }}

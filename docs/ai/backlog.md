@@ -19,7 +19,56 @@
 
 ---
 
-## N1. FeedCard 인라인 투표 UI 제거 (정합성)
+## R2. SubmitBar safe-area 이중 누적 제거 (안드로이드 등록 버튼 ↔ BottomNav 여백 과다 — N4 후속, 2026-05-06)
+
+**증상:** 등록 화면에서 안드로이드 단말 기준으로 "등록하기" 버튼과 BottomNav 사이 빈 공간이 비정상적으로 큼. iOS는 시각적으로 무난해서 N4 패치 시점엔 회귀로 인지되지 않았음.
+
+**원인:** SubmitBar와 BottomNav 둘 다 paddingBottom에 `env(safe-area-inset-bottom)`을 가산하고 있었음. BottomNav가 화면 최하단에서 home indicator/gesture nav 인셋을 이미 처리하는데, 그 위의 SubmitBar가 자기 paddingBottom에 동일 인셋을 또 더해서 **safe-area 영역만큼의 빈 공간이 누적**됨. 안드로이드 WebView에선 gesture nav 인셋 + Toss WebView 자체 보정이 겹쳐 더 두드러짐.
+
+**N4의 의도와의 차이:** N4는 "키보드 노출 → BottomNav 언마운트 시 SubmitBar가 자체적으로 home indicator를 회피"하기 위해 SubmitBar에 safe-area 가산을 도입했음. 그러나
+- (a) 키보드가 올라온 상태에선 키보드 자체가 home indicator를 가리므로 safe-area 보정 자체가 의미 없음
+- (b) 키보드가 닫힌 상태(BottomNav 표시 중)에선 BottomNav가 인셋을 처리하므로 SubmitBar의 가산은 100% 중복
+양쪽 케이스 모두에서 SubmitBar의 safe-area 가산이 불필요했음.
+
+**수정:** `src/features/register/components/SubmitBar.tsx`의 paddingBottom 계산에서 `env(safe-area-inset-bottom)` 제거. 단순히 `padding: spacing.lg`로 환원.
+
+**DoD**
+- [x] 안드로이드: 등록 버튼 ↔ BottomNav 간격이 iOS와 동일한 시각 균형 (24px 내외)
+- [x] 키보드 올라왔을 때 BottomNav 언마운트 + SubmitBar 입력 비차단 동작은 N4 그대로 유지
+- [x] 노치/홈인디케이터 회피는 BottomNav의 자체 paddingBottom으로 충분
+
+---
+
+## R1. FeedCard 인라인 투표 복원 (N1 reversal) + MyPage `deleted` 처리 (2026-05-06)
+
+**목표:** `pickit_plan.md` §4-1·§4-2의 "투표 진입 동선" 명세대로 정렬.
+- 오늘의 투표 카드: 탭 → 상세 페이지에서만 투표 가능 (변경 없음, `TodayVoteCard`는 원래 navigate-only)
+- **일반 투표 카드: 카드 내 선택지 버튼으로 피드에서 즉시 투표 가능** (N1에서 잘못 제거된 동선 복구)
+- 마이페이지 "내가 올린 투표"의 심사·반려 탭에서 `deleted` 상태도 함께 노출
+
+**배경**
+- N1은 §4-2와의 충돌을 명목으로 인라인 투표를 제거했지만, §4-2 표는 일반 투표에 한해 인라인을 명시적으로 허용한다(`✅ 피드 / ✅ 상세`). N1 전제 자체가 스펙 오독이었음.
+- `fetchFeedVotes`가 이미 `type="normal"`만 가져오므로 FeedCard는 자연스럽게 일반 투표 전용 → 타입 분기 없이 인라인 UI 부활 안전.
+- `deleted`는 §10-3 "신고 3회 누적 → 자동 블라인드 → 운영자 검토 후 영구 삭제" 끝단의 상태. 사용자에게는 `blinded`와 마찬가지로 "내 투표가 노출되지 않는 이유"라는 동일 멘탈 모델이라 같은 탭으로 묶는 것이 자연스러움.
+
+**작업**
+- `FeedCard`에 `pendingId/voted/confirming/toast` state, 선택지 버튼, 확정/취소 UI, 실패 토스트 복구 (이전 구현 + `recordMyCast(voteCache)` 통합)
+- `HomeFeed`에서 `<FeedCard onCastSuccess={refreshMissions}>` 연결 — 인라인 투표 성공 시 `normalVoteParticipation` 미션 즉시 갱신
+- `MyVoteStatus`에 `"deleted"` 추가 (`src/features/mypage/types.ts`)
+- `mypage.ts` myStatus 매핑: `r.status === "deleted"` 분기 추가
+- `MyVotesSection`: 심사·반려 탭 필터/카운트에 `deleted` 포함, `statusLabel("deleted") = "삭제됨"`(반려와 동일 톤), `canOpen` 자동 차단(기존 로직)
+- `pickit_plan.md` §4-4: "내가 올린 투표" 탭 구조 명문화(진행중/마감/심사·반려), 심사·반려 탭이 `pending_review|blinded|deleted` 묶음임을 기록
+
+**DoD**
+- [x] 일반 투표 카드에서 선택지 탭 → 확정 → 결과 바 즉시 전환 (오늘의 투표 카드는 변경 없음)
+- [x] 인라인 투표 성공 시 `recordMyCast`로 voteCache 갱신 (홈→상세→홈 회귀 시 결과 바 일관)
+- [x] 인라인 투표 성공 후 `MissionWidget`의 "투표 1회" 미션 즉시 체크
+- [x] DB `status="deleted"` 행이 마이페이지 "심사·반려" 탭에 "삭제됨" 라벨로 노출, 탭 진입 차단 유지
+- [x] 타입 무결, lint 통과
+
+---
+
+## N1. FeedCard 인라인 투표 UI 제거 (정합성) — **REVERSED 2026-05-06 (R1 참조)**
 
 **목표:** 기획서 §4-2와의 충돌 해소. 투표는 상세에서만 이뤄지도록 홈 카드의 인라인 투표(선택지 버튼 + 확정/취소)를 제거한다.
 
@@ -36,6 +85,8 @@
 - [x] FeedCard 내 인라인 투표 버튼/확정 UI 제거
 - [x] 카드 어느 영역을 탭해도 `/vote/:id`로 이동
 - [x] 토큰 외 하드코딩 px 0, lint/타입 무결
+
+> ⚠️ **REVERSED:** 본 패킷의 전제(§4-2와 충돌)가 잘못된 판단이었음. `pickit_plan.md` §4-1·§4-2(투표 진입 동선 표)는 일반 투표에 한해 **피드 인라인 투표를 명시적으로 허용**한다(`✅ 피드 / ✅ 상세`). 오늘의 투표만 상세 전용. 동선 단일화 명목으로 인라인을 제거한 것은 스펙 후퇴였고, R1에서 복원했다.
 
 ---
 

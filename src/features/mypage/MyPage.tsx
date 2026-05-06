@@ -23,6 +23,7 @@ import { MyVotesSection } from "./components/MyVotesSection";
 import { ParticipatedSection } from "./components/ParticipatedSection";
 import { ProfileHeader } from "./components/ProfileHeader";
 import { StatGrid } from "./components/StatGrid";
+import { TestAccountInfo } from "./components/TestAccountInfo";
 
 type Status = "loading" | "ready" | "error";
 
@@ -85,6 +86,7 @@ export function MyPage() {
       ) : (
         <>
           <ProfileHeader profile={data.profile} />
+          <TestAccountInfo />
           <StatGrid stats={data.stats} />
           <ClaimRewardsCard
             rewards={unclaimed}
