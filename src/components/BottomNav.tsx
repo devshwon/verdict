@@ -5,34 +5,19 @@ import {
   fontSize,
   fontWeight,
   palette,
+  radius,
+  shadow,
   spacing,
 } from "../design/tokens";
-import {
-  HomeIcon,
-  PlusIcon,
-  UserIcon,
-  type IconProps,
-} from "./BottomNavIcons";
 
 const NAV_ITEMS: {
   to: string;
   label: string;
   match: (p: string) => boolean;
-  Icon: (p: IconProps) => JSX.Element;
 }[] = [
-  { to: "/", label: "홈", match: (p) => p === "/", Icon: HomeIcon },
-  {
-    to: "/register",
-    label: "등록",
-    match: (p) => p.startsWith("/register"),
-    Icon: PlusIcon,
-  },
-  {
-    to: "/mypage",
-    label: "마이",
-    match: (p) => p.startsWith("/mypage"),
-    Icon: UserIcon,
-  },
+  { to: "/", label: "홈", match: (p) => p === "/" },
+  { to: "/register", label: "등록", match: (p) => p.startsWith("/register") },
+  { to: "/mypage", label: "마이", match: (p) => p.startsWith("/mypage") },
 ];
 
 /**
@@ -71,14 +56,22 @@ export function BottomNav() {
   return (
     <nav
       style={{
+        position: "fixed",
+        // safe-area-inset-bottom 만큼 더 띄워서 home indicator 와 겹치지 않게
+        bottom: `calc(${spacing.lg}px + env(safe-area-inset-bottom))`,
+        left: "50%",
+        transform: "translateX(-50%)",
         display: "flex",
+        gap: spacing.xs,
+        padding: spacing.xs,
         background: palette.background,
-        borderTop: `${borderWidth.hairline}px solid ${palette.border}`,
-        // safe-area-inset 전체 + 최소 breathing room. 미지원 환경에선 0 + sm.
-        paddingBottom: `calc(${spacing.sm}px + env(safe-area-inset-bottom))`,
+        borderRadius: radius.pill,
+        border: `${borderWidth.hairline}px solid ${palette.border}`,
+        boxShadow: shadow.md,
+        zIndex: 10,
       }}
     >
-      {NAV_ITEMS.map(({ to, label, match, Icon }) => {
+      {NAV_ITEMS.map(({ to, label, match }) => {
         const isActive = match(pathname);
         return (
           <Link
@@ -86,21 +79,16 @@ export function BottomNav() {
             to={to}
             aria-current={isActive ? "page" : undefined}
             style={{
-              flex: 1,
-              padding: `${spacing.sm}px 0 ${spacing.md}px`,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: spacing.xs,
+              padding: `${spacing.sm}px ${spacing.lg}px`,
+              borderRadius: radius.pill,
+              background: isActive ? palette.brandSurface : "transparent",
               color: isActive ? palette.brandText : palette.textSecondary,
-              fontSize: fontSize.caption,
-              fontWeight: isActive ? fontWeight.bold : fontWeight.medium,
+              fontSize: fontSize.label,
+              fontWeight: fontWeight.bold,
               textDecoration: "none",
             }}
           >
-            <Icon active={isActive} />
-            <span>{label}</span>
+            {label}
           </Link>
         );
       })}

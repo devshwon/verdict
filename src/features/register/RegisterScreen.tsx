@@ -62,16 +62,7 @@ export function RegisterScreen() {
   const showAdToggle = form.requiresGate && form.hasFreePass;
 
   return (
-    <AppShell
-      footer={
-        <SubmitBar
-          disabled={!form.canSubmit}
-          loading={form.submitting}
-          onSubmit={form.submit}
-          label={submitLabel}
-        />
-      }
-    >
+    <AppShell>
       <Top
         title={<Top.TitleParagraph size={22}>질문 등록</Top.TitleParagraph>}
         subtitleBottom={
@@ -138,7 +129,7 @@ export function RegisterScreen() {
         </div>
       ) : null}
 
-      <div style={{ paddingBottom: spacing.xxl }}>
+      <div>
         <QuestionInput
           value={form.question}
           errorMessage={form.errors.question}
@@ -170,6 +161,18 @@ export function RegisterScreen() {
           checked={form.todayCandidate}
           onChange={form.setTodayCandidate}
         />
+
+        {/* 등록하기 버튼은 스크롤되는 콘텐츠의 마지막 요소.
+            AppShell main 의 paddingBottom 이 BottomNav 캡슐 만큼 자동 확보하므로
+            여기서는 버튼-캡슐 사이 추가 여백만 둠 (캡슐 위로 자연스럽게 올라오도록). */}
+        <div style={{ paddingTop: spacing.xs }}>
+          <SubmitBar
+            disabled={!form.canSubmit}
+            loading={form.submitting}
+            onSubmit={form.submit}
+            label={submitLabel}
+          />
+        </div>
       </div>
 
       {toast !== null ? (

@@ -33,6 +33,12 @@ export function AppShell({
           minHeight: 0,
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
+          // BottomNav 가 부유 캡슐(position:fixed)이라 콘텐츠 위로 떠 있음.
+          // 캡슐 높이 + bottom 여백 + safe-area 만큼 자동 padding 으로
+          // 모든 페이지에서 마지막 콘텐츠가 캡슐에 가려지지 않도록 보장.
+          paddingBottom: hideBottomNav
+            ? 0
+            : "calc(80px + env(safe-area-inset-bottom))",
         }}
       >
         {children}
