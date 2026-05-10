@@ -158,7 +158,10 @@ export function RegisterScreen() {
           }}
         />
 
-        <DurationPicker value={form.duration} onChange={form.setDuration} />
+        {/* 후보 신청은 promote 시 1440 으로 자동 덮어쓰므로 duration 입력 무의미 → 숨김 */}
+        {form.todayCandidate ? null : (
+          <DurationPicker value={form.duration} onChange={form.setDuration} />
+        )}
 
         <TodayCandidateToggle
           checked={form.todayCandidate}
