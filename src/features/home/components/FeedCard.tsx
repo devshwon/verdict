@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { Button, Toast } from "@toss/tds-mobile";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pill } from "../../../components/Pill";
 import {
@@ -11,23 +12,43 @@ import {
   fontWeight,
   layout,
   lineHeight,
+  motion,
   palette,
   radius,
   spacing,
 } from "../../../design/tokens";
+import { castVote, payoutSelfPending } from "../../../lib/db/votes";
+import { recordMyCast } from "../../../lib/voteCache";
 import type { FeedVote, VoteOption } from "../types";
 
 type Props = {
   vote: FeedVote;
+  onCastSuccess?: () => void;
 };
 
-export function FeedCard({ vote }: Props) {
+export function FeedCard({ vote, onCastSuccess }: Props) {
   const navigate = useNavigate();
   const navigatingRef = useRef(false);
   const cat = categoryColors[vote.category];
   const tag = feedTagStyles[vote.tag];
   const categoryLabel =
     categories.find((c) => c.key === vote.category)?.label ?? "";
+
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [voted, setVoted] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  // 인라인 투표 직후 결과 즉시 반영용. props 의 vote.options 는 피드 로드 시점 server 값이라
+  // 자기 투표 1건이 안 들어가 있음 → 자기 표를 클라이언트에서 +1 한 옵션을 결과 바에 사용.
+  const [postCastOptions, setPostCastOptions] = useState<VoteOption[] | null>(
+    null,
+  );
+  const [postCastParticipants, setPostCastParticipants] = useState<number | null>(
+    null,
+  );
+
+  const displayOptions = postCastOptions ?? vote.options;
+  const displayParticipants = postCastParticipants ?? vote.participants;
 
   const goDetail = () => {
     if (navigatingRef.current) return;
@@ -40,6 +61,49 @@ export function FeedCard({ vote }: Props) {
       e.preventDefault();
       goDetail();
     }
+  };
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+
+  const closed = vote.tag === "closed";
+  const showResults = vote.showResultBar || voted;
+  const inlineVotable = !closed && !showResults;
+  const pendingOption =
+    pendingId !== null
+      ? vote.options.find((o) => o.id === pendingId) ?? null
+      : null;
+
+  const confirmVote = async () => {
+    if (confirming || voted || pendingId === null) return;
+    setConfirming(true);
+    const result = await castVote(vote.id, pendingId);
+    if (result.ok) {
+      recordMyCast(vote.id, pendingId);
+
+      // 자기 표 1건 즉시 반영 — server 트리거가 participants_count +1 시키지만
+      // 피드 props 는 로드 시점 stale 값이라 결과 바가 0% 로 보일 수 있음.
+      const selectedId = pendingId;
+      const newTotal = vote.participants + 1;
+      const updatedOptions: VoteOption[] = vote.options.map((opt) => {
+        const newCount = opt.id === selectedId ? opt.count + 1 : opt.count;
+        const newRatio =
+          newTotal > 0 ? Math.round((newCount / newTotal) * 100) : 0;
+        return { ...opt, count: newCount, ratio: newRatio };
+      });
+      setPostCastOptions(updatedOptions);
+      setPostCastParticipants(newTotal);
+
+      setVoted(true);
+      setPendingId(null);
+      onCastSuccess?.();
+
+      // 투표 참여 1P + (첫 투표 시 출석 1P) 즉시 지급 시도. 실패해도 cron 5분 fallback.
+      void payoutSelfPending();
+    } else {
+      setToast(result.message);
+      setPendingId(null);
+    }
+    setConfirming(false);
   };
 
   return (
@@ -81,7 +145,7 @@ export function FeedCard({ vote }: Props) {
           }}
         >
           {vote.tag === "closed" || vote.tag === "popular"
-            ? `${vote.participants.toLocaleString()}명 참여`
+            ? `${displayParticipants.toLocaleString()}명 참여`
             : vote.remainingLabel}
         </span>
       </div>
@@ -97,17 +161,125 @@ export function FeedCard({ vote }: Props) {
         “{vote.question}”
       </div>
 
-      {vote.showResultBar ? (
+      {showResults ? (
         <div
           style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}
         >
-          {vote.options.map((opt) => (
+          {voted ? (
+            <span
+              style={{
+                fontSize: fontSize.small,
+                fontWeight: fontWeight.medium,
+                color: cat.bar,
+              }}
+            >
+              참여 완료
+            </span>
+          ) : null}
+          {displayOptions.map((opt) => (
             <ResultBar
               key={opt.id}
               option={opt}
               barColor={opt.ratio >= 50 ? cat.bar : palette.textTertiary}
             />
           ))}
+        </div>
+      ) : inlineVotable ? (
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}
+        >
+          <div style={{ display: "flex", gap: spacing.sm }}>
+            {vote.options.map((opt) => {
+              const isPending = pendingId === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={confirming}
+                  onClick={(e) => {
+                    stop(e);
+                    if (confirming) return;
+                    setPendingId((prev) => (prev === opt.id ? null : opt.id));
+                  }}
+                  aria-pressed={isPending}
+                  style={{
+                    flex: 1,
+                    padding: `${spacing.md}px 0`,
+                    borderRadius: radius.md,
+                    border: `${borderWidth.hairline}px solid ${
+                      isPending ? cat.bar : palette.border
+                    }`,
+                    background: isPending ? cat.surface : palette.surface,
+                    color: isPending ? cat.text : palette.textPrimary,
+                    fontSize: fontSize.body,
+                    fontWeight: fontWeight.medium,
+                    cursor: confirming ? "default" : "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {pendingOption ? (
+            <div
+              style={{
+                padding: `${spacing.sm}px ${spacing.md}px`,
+                borderRadius: radius.md,
+                background: cat.surface,
+                display: "flex",
+                alignItems: "center",
+                gap: spacing.sm,
+              }}
+            >
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: fontSize.label,
+                  fontWeight: fontWeight.medium,
+                  color: cat.text,
+                  lineHeight: lineHeight.tight,
+                }}
+              >
+                ‘{pendingOption.label}’(으)로 투표할까요?
+              </span>
+              <div onClick={stop}>
+                <Button
+                  size="small"
+                  variant="weak"
+                  color="dark"
+                  disabled={confirming}
+                  onClick={() => setPendingId(null)}
+                >
+                  취소
+                </Button>
+              </div>
+              <div onClick={stop}>
+                <Button
+                  size="small"
+                  variant="fill"
+                  color="primary"
+                  disabled={confirming}
+                  onClick={confirmVote}
+                >
+                  확정
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {toast !== null ? (
+        <div onClick={stop}>
+          <Toast
+            position="bottom"
+            open
+            text={toast}
+            duration={motion.toastMs}
+            onClose={() => setToast(null)}
+          />
         </div>
       ) : null}
     </div>

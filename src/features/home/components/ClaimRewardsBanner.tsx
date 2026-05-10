@@ -9,12 +9,14 @@ import {
 } from "../../../design/tokens";
 import {
   claimAllUnclaimedPoints,
+  payoutSelfPending,
   type UnclaimedPoint,
 } from "../../../lib/db/votes";
 
 type Props = {
   rewards: UnclaimedPoint[];
-  onClaimed: () => void;
+  // immediate=true 면 즉시 토스 지급 완료, false 면 신청만 (5분 cron fallback)
+  onClaimed: (immediate: boolean) => void;
 };
 
 export function ClaimRewardsBanner({ rewards, onClaimed }: Props) {
@@ -26,11 +28,16 @@ export function ClaimRewardsBanner({ rewards, onClaimed }: Props) {
   const handleClaim = async () => {
     if (busy) return;
     setBusy(true);
+    let immediate = false;
     try {
-      await claimAllUnclaimedPoints();
+      const { claimedCount } = await claimAllUnclaimedPoints();
+      if (claimedCount > 0) {
+        const payout = await payoutSelfPending();
+        immediate = payout.immediate && payout.succeeded > 0;
+      }
     } finally {
       setBusy(false);
-      onClaimed();
+      onClaimed(immediate);
     }
   };
 

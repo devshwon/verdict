@@ -38,7 +38,7 @@ supabase secrets set OPENAI_API_KEY=sk-...
 # supabase secrets set TOSS_BIZWALLET_BASE_URL=https://...
 ```
 
-- [ ] `OPENAI_API_KEY` 설정 (LLM 검열용 — `gpt-4o-mini`) — **베타에서도 필수** (안 넣으면 검열 실패)
+- [ ] `OPENAI_API_KEY` 설정 (LLM 검열용 — `gpt-5.4-nano`) — **베타에서도 필수** (안 넣으면 검열 실패)
 - [ ] **(출시 전 필수)** `TOSS_BIZWALLET_API_KEY` + `TOSS_BIZWALLET_BASE_URL` 설정 — 베타 중에는 생략. `payout-points/index.ts:52`의 안전 가드가 시뮬레이션으로 동작 (transaction_id `simulated-...`, 실 지급 X). **§🚨 출시 전 반드시 처리** 참고.
 
 ---
@@ -150,7 +150,7 @@ where id = '<운영자 user_id>';
 - [ ] 등록 후 검열 통과 시점에 `points_log.status = 'pending'` 적립 (반려/사전휴리스틱 컷 시 미적립)
 - [ ] cron 5분 후 `status = 'completed'` + `toss_transaction_id` 기록
 - [ ] 일일 합산 한도 초과 시 `status = 'blocked'`
-- [ ] 신규 가입자 24h 지연 — `created_at < now() - 24h` 행만 처리되는지
+- [ ] 신규 가입자 지급 게이트 — `admin_settings.payout_new_user_gate_hours` (default 0 = 즉시 지급) 동적 lookup 확인. 어뷰즈 발견 시 admin SettingsPage 에서 조정.
 
 ### 8-4. 자동 정리 (S4, S5)
 - [ ] 마감 30일 경과 일반 투표 → 자동 삭제 (cascade로 vote_options/casts/unlocks 함께)

@@ -29,13 +29,15 @@ const VALID_AD_UNITS = [
 type AdUnit = (typeof VALID_AD_UNITS)[number]
 
 // 일일 캡 (KST 기준)
+//   - per-unit 은 ad_unit 별 정책상 강제 (admin_settings 노출 X — register_3plus/unlock 50, mypage_free_pass 1 고정)
+//   - total daily cap (사용자당 합산) 은 admin_settings.ad_watch_daily_cap 으로 조정 가능 (default 100)
 const PER_UNIT_DAILY_CAP: Record<AdUnit, number> = {
   register_3plus: 50,
   unlock_vote_result: 50,
   mypage_free_pass: 1,    // 1일 1회 강제 (RPC가 별도 검증하지만 여기서도 1차 차단)
   general: 100,
 }
-const TOTAL_DAILY_CAP = 100
+const TOTAL_DAILY_CAP_DEFAULT = 100
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -159,12 +161,31 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
       .gte('watched_at', kstTodayStartIso)
     if (totalErr) throw totalErr
-    if ((totalCount ?? 0) >= TOTAL_DAILY_CAP) {
+
+    // 합산 일일 캡 — admin_settings.ad_watch_daily_cap 우선, 없으면 default 100
+    let totalCap = TOTAL_DAILY_CAP_DEFAULT
+    try {
+      const { data: capSetting } = await admin
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'ad_watch_daily_cap')
+        .single()
+      const parsed = typeof capSetting?.value === 'number'
+        ? capSetting.value
+        : Number(capSetting?.value)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        totalCap = parsed
+      }
+    } catch {
+      // admin_settings 미적용/조회 실패 시 default 유지
+    }
+
+    if ((totalCount ?? 0) >= totalCap) {
       return withCors(
         Response.json(
           {
             ok: false,
-            error: `total daily ad cap reached (${TOTAL_DAILY_CAP}/day)`,
+            error: `total daily ad cap reached (${totalCap}/day)`,
             code: 'cap_reached',
           },
           { status: 429 },

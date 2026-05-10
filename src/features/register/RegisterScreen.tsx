@@ -14,12 +14,14 @@ import { ChoiceList } from "./components/ChoiceList";
 import { DurationPicker } from "./components/DurationPicker";
 import { QuestionInput } from "./components/QuestionInput";
 import { SubmitBar } from "./components/SubmitBar";
+import { TodayCandidateChoiceDialog } from "./components/TodayCandidateChoiceDialog";
 import { TodayCandidateToggle } from "./components/TodayCandidateToggle";
 import { useRegisterForm } from "./useRegisterForm";
 
 export function RegisterScreen() {
   const navigate = useNavigate();
   const [toast, setToast] = useState<string | null>(null);
+  const [todayChoiceOpen, setTodayChoiceOpen] = useState(false);
 
   const form = useRegisterForm({
     onSuccess: (_voteId, payload, kind, rejectionReason, adUsedAtRegister) => {
@@ -62,16 +64,7 @@ export function RegisterScreen() {
   const showAdToggle = form.requiresGate && form.hasFreePass;
 
   return (
-    <AppShell
-      footer={
-        <SubmitBar
-          disabled={!form.canSubmit}
-          loading={form.submitting}
-          onSubmit={form.submit}
-          label={submitLabel}
-        />
-      }
-    >
+    <AppShell>
       <Top
         title={<Top.TitleParagraph size={22}>질문 등록</Top.TitleParagraph>}
         subtitleBottom={
@@ -104,6 +97,7 @@ export function RegisterScreen() {
             fontSize: fontSize.label,
             fontWeight: fontWeight.medium,
             lineHeight: 1.4,
+            whiteSpace: "pre-line",
           }}
         >
           {statusText}
@@ -138,7 +132,7 @@ export function RegisterScreen() {
         </div>
       ) : null}
 
-      <div style={{ paddingBottom: spacing.xxl }}>
+      <div>
         <QuestionInput
           value={form.question}
           errorMessage={form.errors.question}
@@ -170,7 +164,36 @@ export function RegisterScreen() {
           checked={form.todayCandidate}
           onChange={form.setTodayCandidate}
         />
+
+        {/* 등록하기 버튼은 스크롤되는 콘텐츠의 마지막 요소.
+            AppShell main 의 paddingBottom 이 BottomNav 캡슐 만큼 자동 확보하므로
+            여기서는 버튼-캡슐 사이 추가 여백만 둠 (캡슐 위로 자연스럽게 올라오도록). */}
+        <div style={{ paddingTop: spacing.xs }}>
+          <SubmitBar
+            disabled={!form.canSubmit}
+            loading={form.submitting}
+            onSubmit={() => {
+              if (form.todayCandidate) {
+                // 광고/이용권 선택 dialog 진입
+                setTodayChoiceOpen(true);
+              } else {
+                void form.submit();
+              }
+            }}
+            label={submitLabel}
+          />
+        </div>
       </div>
+
+      <TodayCandidateChoiceDialog
+        open={todayChoiceOpen}
+        freePassBalance={form.missions?.freePassBalance ?? 0}
+        onClose={() => setTodayChoiceOpen(false)}
+        onUseFreePass={() =>
+          void form.submit({ todayCandidateChoice: "freePass" })
+        }
+        onWatchAd={() => void form.submit({ todayCandidateChoice: "ad" })}
+      />
 
       {toast !== null ? (
         <Toast
@@ -194,7 +217,7 @@ function renderStatusText(form: ReturnType<typeof useRegisterForm>): string | nu
     if (form.status.todayCandidateCapReached) {
       return "오늘의 투표 후보는 하루 1건만 신청할 수 있어요.";
     }
-    return "오늘의 투표 후보 신청 — 선정 시 다음날 오전 8시 공개. 작성 5P, 선정 시 +30P (1인 1일 1건)";
+    return "오늘의 투표 후보 신청\n- 선정 시 다음날 오전 8시 공개. 작성 5P, 선정 시 +30P (1인 1일 1건)";
   }
   if (form.status.normalCapReached) {
     return "오늘 등록 한도(10건)에 도달했어요. 내일 다시 시도해주세요.";

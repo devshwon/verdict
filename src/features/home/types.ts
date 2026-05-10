@@ -4,6 +4,7 @@ export type VoteOption = {
   id: string;
   label: string;
   ratio: number;
+  count: number;
 };
 
 export type FeedVote = {

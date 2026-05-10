@@ -5,7 +5,7 @@ export default defineConfig({
   brand: {
     displayName: "판정단",
     primaryColor: "#534AB7",
-    icon: "", // TODO: 앱 아이콘 이미지 주소 설정 필요
+    icon: "https://static.toss.im/appsintoss/28075/f7459d48-17f8-4c63-8293-4945082f68c8.png",
   },
   web: {
     host: "localhost",

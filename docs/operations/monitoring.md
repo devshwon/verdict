@@ -202,7 +202,7 @@ where status = 'pending'
   and created_at < now() - interval '30 minutes'
 group by trigger
 order by oldest asc;
--- 24시간 이상 pending이면 신규 가입자 24h 지연이 아닌 한 worker 문제
+-- 30분 이상 pending이면 worker 문제 또는 admin_settings.payout_new_user_gate_hours 가 큰 값일 가능성 (default 0)
 ```
 
 ### 5-3. 일일 한도로 차단된 사용자

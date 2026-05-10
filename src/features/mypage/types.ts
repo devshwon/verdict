@@ -11,7 +11,12 @@ export type MyStats = {
   featured: number;
 };
 
-export type MyVoteStatus = "ongoing" | "closed" | "pending_review" | "blinded";
+export type MyVoteStatus =
+  | "ongoing"
+  | "closed"
+  | "pending_review"
+  | "blinded"
+  | "deleted";
 
 export type MyVote = {
   id: string;

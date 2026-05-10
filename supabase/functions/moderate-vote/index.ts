@@ -6,7 +6,7 @@
 //   3) 함수가 service_role로 vote + options 조회 + 최근 30일 같은 카테고리 sample 조회 (중복 검사)
 //   4) **사전 휴리스틱**: 명백한 도배(짧은/반복 문자) → OpenAI 호출 없이 즉시 반려
 //   5) **호출 캡 체크**: fn_check_moderation_call (user당 일일 20회 한도 — cost 안전망)
-//   6) OpenAI Chat Completions 호출 (gpt-4o-mini + JSON 모드)
+//   6) OpenAI Chat Completions 호출 (gpt-5.4-nano + JSON 모드)
 //   7) service_role로 votes UPDATE (status, ai_score, rejection_reason)
 //   8) fn_record_moderation_result 호출 — approved 시 보상 적립, rejected 시 카운터 증가/연속3회 정지
 //
@@ -16,7 +16,7 @@
 //
 // 비용 (1건당, sample 10개 기준):
 //   - 입력 ~800 tokens, 출력 ~80 tokens
-//   - gpt-4o-mini: ₩0.24 / 건 (입력 $0.15 / 출력 $0.60 per 1M tokens)
+//   - 모델 단가에 따라 산정 — gpt-5.4-nano 단가로 재산정 필요
 //
 // 어뷰징 방어 다중 레이어:
 //   - register_vote RPC: 일일 반려 5회 도달 시 P0008로 등록 자체 차단 (OpenAI 호출 안 됨)
@@ -35,8 +35,8 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 //   - 'with_llm': 기존 흐름. 휴리스틱 + LLM 검열로 차단.
 const MODERATION_MODE = (Deno.env.get('MODERATION_MODE') ?? 'heuristic_only').toLowerCase()
 
-// 기획서 §10 — gpt-4o-mini로 검열 (한국어 분류 + JSON 출력에 충분, 비용 효율 최대)
-const OPENAI_MODEL = 'gpt-4o-mini'
+// 기획서 §10 — gpt-5.4-nano로 검열 (한국어 분류 + JSON 출력에 충분, 비용 효율 최대)
+const OPENAI_MODEL = 'gpt-5.4-nano'
 const SIMILARITY_SAMPLE_LIMIT = 10
 const DAILY_MODERATION_CALL_CAP = 20
 
@@ -148,7 +148,7 @@ rejection_reason 작성 규칙:
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      max_tokens: 256,
+      max_completion_tokens: 256,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
@@ -407,7 +407,7 @@ Deno.serve(async (req) => {
     if (recentErr) throw recentErr
     const recentSample = ((recentRows ?? []) as { question: string }[]).map((r) => r.question)
 
-    // ── LLM 검열 (OpenAI gpt-4o-mini) ──────────────────────────
+    // ── LLM 검열 (OpenAI gpt-5.4-nano) ──────────────────────────
     const result = await callOpenAI(vote.question, options, vote.category, recentSample)
 
     // ── votes UPDATE ────────────────────────────────────────────

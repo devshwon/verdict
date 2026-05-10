@@ -88,9 +88,13 @@ export function MyPage() {
           <StatGrid stats={data.stats} />
           <ClaimRewardsCard
             rewards={unclaimed}
-            onClaimed={(count, totalAmount) => {
+            onClaimed={(count, totalAmount, immediate) => {
               if (count > 0) {
-                setToast(`${totalAmount}P 받기 신청 완료!`);
+                setToast(
+                  immediate
+                    ? `${totalAmount}P 지급 완료!`
+                    : `${totalAmount}P 받기 신청 완료. 잠시 후 자동 지급돼요`,
+                );
                 void load();
               }
             }}

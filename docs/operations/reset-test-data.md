@@ -34,7 +34,7 @@
 
 ## 2. 풀 와이프 (계정까지 삭제)
 
-토스 로그인부터 다시 검증해야 하는 경우 (예: 신규 가입 24h 지연 가드, toss-auth 재진입 흐름).
+토스 로그인부터 다시 검증해야 하는 경우 (예: toss-auth 재진입 흐름, gender/age_bucket 복호화 검증). 신규 가입자 지급 게이트는 default 0 (즉시) 으로 외부화됨 — admin_settings.payout_new_user_gate_hours.
 
 1. 1번 절차 먼저 실행 (FK 정합성 위해)
 2. 같은 SQL Editor에서 파일 맨 아래 다음 블록의 `/* */` 주석을 제거 → Run

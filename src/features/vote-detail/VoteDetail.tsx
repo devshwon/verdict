@@ -22,6 +22,7 @@ import { watchRewardAd } from "../../lib/ads";
 import {
   castVote,
   fetchVoteDetail,
+  payoutSelfPending,
   getDailyMissions,
   registerAdWatch,
   reportVote,
@@ -172,6 +173,9 @@ export function VoteDetail() {
 
     setMyOptionId(optionId);
     recordMyCast(detail.id, optionId);
+
+    // 투표 참여 1P + (첫 투표 시 출석 1P) 즉시 지급 시도. 실패해도 cron 5분 fallback.
+    void payoutSelfPending();
 
     // 캐스팅 성공 후 백그라운드로 최신 결과 fetch + 0.8초 연출 동기화
     const reload = load();

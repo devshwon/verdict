@@ -30,7 +30,7 @@ votes (type='today_candidate', status='active')
 - **1인 1일 1건**: `register_vote` RPC가 강제 (P0002 에러 코드)
 - **카테고리별 1건씩 선정**: 일상 / 게임 / 연애·관계 / 직장·학교 4개 카테고리 (오늘의 투표 카드 노출 카테고리 — `TODAY_CARD_CATEGORIES`). `etc`는 오늘의 투표 후보 대상 아님.
 - **발행 시각**: 매일 KST 08:00. 마감 KST 23:59. 24시간 미만 — 가벼운 앱 톤 유지.
-- **포인트 지급**: 작성 시 5P(자동) + 선정 시 +30P + 참여 50명당 +5P (캡 100P, 작성 5P 별도)
+- **포인트 지급**: 작성 시 5P(자동) + 선정 시 +30P + 참여 100명당 +3P (캡 30P/건, 1000명까지, 작성 5P 별도)
 - **트랙 분리**: 일반 투표(`normal_*`)와 보상/통계 분리 — `points_log.trigger`도 prefix 분리
 
 ---
@@ -183,7 +183,7 @@ on conflict (idempotency_key) do nothing;
 
 §2-2 `promote_today_candidates` RPC 호출 시 자동으로 `today_selection` 30P가 적립됨. 별도 SQL 불필요.
 
-> 참여 50명당 +5P (캡 100P)는 마감 후 별도 워커에서 처리 — 출시 전 후속 마이그레이션 추가 필요.
+> 참여 100명당 +3P (캡 30P/건, 1000명까지)는 `vote_casts` AFTER INSERT 트리거로 즉시 적립 (`status='unclaimed'`). 마이그레이션 `20260510000002_normal_100_participants_bonus.sql` 참고. pickit_plan.md §7-1 정책.
 
 ---
 

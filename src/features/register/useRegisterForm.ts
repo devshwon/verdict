@@ -224,7 +224,11 @@ export function useRegisterForm(options: Options = {}) {
     setTouched({});
   };
 
-  const submit = async () => {
+  const submit = async (opts?: {
+    // today_candidate=true 일 때 사용자 선택 (광고 시청 vs 무료이용권 사용).
+    // RegisterScreen 의 dialog 가 선택을 받아서 전달.
+    todayCandidateChoice?: "ad" | "freePass";
+  }) => {
     if (submittingRef.current) return;
     setTouched({ question: true, choices: true, category: true });
 
@@ -237,15 +241,39 @@ export function useRegisterForm(options: Options = {}) {
     );
     if (payload === null || capBlocked) return;
 
+    // today_candidate 는 dialog 에서 선택값을 받지 않고는 진행 X (어뷰즈 방지).
+    if (todayCandidate && !opts?.todayCandidateChoice) return;
+
     submittingRef.current = true;
     setSubmitting(true);
 
     try {
-      // 3건째+ 일반 등록은 무료이용권 우선 사용, 없거나 강제 광고 모드면 광고 시청
+      // 게이트 처리:
+      //   - normal: 3건째+ 면 게이트 (이용권 자동 우선, forceAdMode 면 광고)
+      //   - today_candidate: dialog 선택값 따라 광고 또는 이용권 (매번 필요)
       let adUsed = false;
       let useFreePass = false;
       let adToken: string | undefined;
-      if (willUseFreePass) {
+      if (todayCandidate) {
+        if (opts?.todayCandidateChoice === "freePass") {
+          useFreePass = true;
+        } else if (opts?.todayCandidateChoice === "ad") {
+          await watchRewardAd();
+          const tokenOutcome = await registerAdWatch("register_3plus");
+          if (!tokenOutcome.ok) {
+            if (mountedRef.current) {
+              onError?.({
+                ok: false,
+                reason: "unknown",
+                message: tokenOutcome.message,
+              });
+            }
+            return;
+          }
+          adToken = tokenOutcome.adToken;
+          adUsed = true;
+        }
+      } else if (willUseFreePass) {
         useFreePass = true;
       } else if (requiresAd) {
         await watchRewardAd();

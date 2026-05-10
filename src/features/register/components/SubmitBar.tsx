@@ -13,8 +13,8 @@ export function SubmitBar({ disabled, loading, onSubmit, label = "등록하기" 
     <div
       style={{
         padding: spacing.lg,
-        // safe-area-inset 만큼 아래 여백 추가 (키보드 노출 시 BottomNav가 사라져도 home indicator 회피)
-        paddingBottom: `calc(${spacing.lg}px + env(safe-area-inset-bottom))`,
+        // RegisterScreen 의 스크롤 콘텐츠 마지막 요소.
+        // BottomNav 캡슐과의 간격은 AppShell main 의 paddingBottom 이 처리.
         background: palette.background,
         borderTop: `${borderWidth.hairline}px solid ${palette.divider}`,
       }}

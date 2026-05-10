@@ -19,7 +19,6 @@ import {
 } from "../../lib/db/votes";
 import { AdBanner } from "./components/AdBanner";
 import { CategoryTabs } from "./components/CategoryTabs";
-import { ClaimRewardsBanner } from "./components/ClaimRewardsBanner";
 import { FeedCard } from "./components/FeedCard";
 import { MissionWidget } from "./components/MissionWidget";
 import { PastTodayCarousel } from "./components/PastTodayCarousel";
@@ -229,12 +228,7 @@ export function HomeFeed() {
         }
       />
 
-      <ClaimRewardsBanner
-        rewards={unclaimed}
-        onClaimed={() => void refreshUnclaimed()}
-      />
-
-      <MissionWidget missions={missions} />
+      <MissionWidget missions={missions} unclaimedCount={unclaimed.length} />
 
       <CategoryTabs active={active} onChange={setActive} />
 
@@ -253,7 +247,10 @@ export function HomeFeed() {
           ) : (
             feed.map((vote, i) => (
               <Fragment key={vote.id}>
-                <FeedCard vote={vote} />
+                <FeedCard
+                  vote={vote}
+                  onCastSuccess={() => void refreshMissions()}
+                />
                 {/* 5장마다 인라인 배너 (1번째·2번째·…·5번째 카드 다음) — 5장 미만 피드면 광고 미삽입 */}
                 {(i + 1) % AD_INTERVAL === 0 && i + 1 < feed.length ? (
                   <AdBanner />

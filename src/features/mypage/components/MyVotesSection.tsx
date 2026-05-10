@@ -30,7 +30,11 @@ export function MyVotesSection({ votes }: Props) {
       votes.filter((v) => {
         if (tab === "ongoing") return v.status === "ongoing";
         if (tab === "closed") return v.status === "closed";
-        return v.status === "pending_review" || v.status === "blinded";
+        return (
+          v.status === "pending_review" ||
+          v.status === "blinded" ||
+          v.status === "deleted"
+        );
       }),
     [votes, tab],
   );
@@ -38,7 +42,10 @@ export function MyVotesSection({ votes }: Props) {
   const reviewCount = useMemo(
     () =>
       votes.filter(
-        (v) => v.status === "pending_review" || v.status === "blinded",
+        (v) =>
+          v.status === "pending_review" ||
+          v.status === "blinded" ||
+          v.status === "deleted",
       ).length,
     [votes],
   );
@@ -146,6 +153,8 @@ function statusLabel(status: MyVoteStatus): {
       return { label: "심사 중", bg: "#FAEEDA", color: "#633806" };
     case "blinded":
       return { label: "반려", bg: "#FBE9E7", color: "#712B13" };
+    case "deleted":
+      return { label: "삭제됨", bg: "#FBE9E7", color: "#712B13" };
     case "closed":
       return { label: "마감", bg: palette.divider, color: palette.textTertiary };
     default:

@@ -146,7 +146,7 @@ on conflict (id) do nothing;
 1. `Authorization: Bearer <user JWT>` 검증 → service_role 클라이언트로 `users.is_admin` 확인 (P0008)
 2. `admin_prompts`에서 `normal_vote_gen_system`, `normal_vote_gen_user` 조회 (없으면 기본값 fallback)
 3. `{category}` `{count}` `{exclude}` placeholder 치환
-4. OpenAI Chat Completions 호출 (gpt-4o-mini, JSON 모드, temperature=0.9)
+4. OpenAI Chat Completions 호출 (gpt-5.4-nano, JSON 모드, temperature=0.9)
 5. 응답 JSON 검증:
    - `items.length` ∈ [2, 5]
    - 각 question: 4~60자
@@ -156,7 +156,7 @@ on conflict (id) do nothing;
 
 비용 추정 (1회 생성):
 - 입력 ~600 토큰, 출력 ~250 토큰
-- gpt-4o-mini: ₩0.18 / 회
+- gpt-5.4-nano: 모델 단가 기준 재산정 필요
 
 ### 3-4. 신규 RPC — `admin_create_normal_vote`
 파일: 신규 마이그레이션 (§7)
@@ -590,7 +590,7 @@ export async function createTodayVote(item: { question, options, category, publi
 - [ ] `admin_create_rate_limit` 테이블 + RPC 내부 카운터
 
 ### 10-2. Edge Functions
-- [ ] `admin-generate-vote-topics` (Deno + OpenAI gpt-4o-mini)
+- [ ] `admin-generate-vote-topics` (Deno + OpenAI gpt-5.4-nano)
 - [ ] `admin-generate-today-candidate` (동일 스택)
 - [ ] 두 함수 모두 JWT 검증 + `is_admin` 확인 + JSON 스키마 검증 + 1회 재시도
 

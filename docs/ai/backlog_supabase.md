@@ -14,9 +14,9 @@
 - [x] 무료이용권 모델 + 일일 미션 RPC + 홈 미니 위젯
 - [x] 오늘의 투표 승격 운영 가이드 (`docs/operations/today-vote-promotion.md`)
 - [x] v2 기능 문서 (`docs/future/v2-features.md` — 친구 초대 / 인앱 결제)
-- [x] **S1 LLM 검열** — moderate-vote Edge Function (OpenAI gpt-4o-mini, JSON 모드) + register_vote가 pending_review로 INSERT
+- [x] **S1 LLM 검열** — moderate-vote Edge Function (OpenAI gpt-5.4-nano, JSON 모드) + register_vote가 pending_review로 INSERT
 - [x] **S2 광고 시청 콜백 검증** — ad_watches 테이블 + register-ad-watch EF + 모든 RPC가 ad_token 검증
-- [x] **S3 토스포인트 지급 워커** — payout-points EF + fn_get_pending_payouts + 일일 한도 + 신규 24h 지연
+- [x] **S3 토스포인트 지급 워커** — payout-points EF + fn_get_pending_payouts + 일일 한도 + 신규 가입자 지급 게이트 (admin_settings.payout_new_user_gate_hours, default 0)
 - [x] **S1-FALLBACK** — fn_moderate_pending_fallback + 5분마다 cron 자동 재시도
 - [x] **S4 자동 삭제 + 운영 모니터링** — `docs/operations/monitoring.md` (cron 잡 / 큐 / 어뷰징 / 알람 임계값)
 - [x] **S5 today_candidate 7일 만료** — cleanup-today-candidates-7d cron
@@ -35,7 +35,7 @@
 - `supabase/migrations/.../votes_default_pending_review.sql` — `votes.status` 기본값 `'active'` → `'pending_review'` 변경 (이미 enum에는 추가됨 — 마이그레이션 #20260430000000)
 - `supabase/functions/moderate-vote/index.ts` — OpenAI Chat Completions 호출:
   - 입력: `vote_id`
-  - `gpt-4o-mini` + `response_format: { type: "json_object" }` (JSON 강제)
+  - `gpt-5.4-nano` + `response_format: { type: "json_object" }` (JSON 강제)
   - 질문/옵션/카테고리 + 최근 30일 같은 카테고리 sample(10개)로 유사도 평가
   - 통과 → `votes.status = 'active'`, `votes.ai_score = <0~10>`
   - 반려 → `votes.status = 'blinded'` + `rejection_reason` 기록
@@ -45,7 +45,7 @@
 
 **DoD**
 - [x] `votes.status` 기본값을 `pending_review`로 마이그레이션 (`20260430000008_moderation.sql`)
-- [x] `moderate-vote` Edge Function 작성 — OpenAI `gpt-4o-mini` + JSON 모드 + sample 10개 유사도 비교
+- [x] `moderate-vote` Edge Function 작성 — OpenAI `gpt-5.4-nano` + JSON 모드 + sample 10개 유사도 비교
 - [x] 등록 → 검열 → active/blinded 자동 전환 (RegisterScreen이 등록 직후 호출)
 - [x] 반려 사유를 마이페이지에서 작성자만 조회 (`votes.rejection_reason` + 기존 RLS로 본인만)
 - [ ] 검열 실패 시 fallback 정책 (Edge 타임아웃 → 운영자 큐) — **별도 후속 §S1-FALLBACK**
@@ -95,13 +95,13 @@
   - 성공 → `status='completed'`, `toss_transaction_id` 기록
   - 실패 → `status='failed'`, 사유 별도 컬럼
 - 카테고리 1 / 카테고리 2 일일 합산 한도 검증 (§7-2 — 30P / 130P)
-- 디바이스 1:1 매핑 + 신규 가입자 24h 지연 + 단일 클릭 패턴 탐지 (별도 검증 단계)
+- 디바이스 1:1 매핑 + 신규 가입자 지급 게이트 (`admin_settings.payout_new_user_gate_hours`, default 0 — 토스 본인인증 어뷰즈 방어 신뢰) + 단일 클릭 패턴 탐지
 - 분쟁 대비: 사용자/시각/금액/트리거 ID 전수 로그 (이미 `points_log`에 있음 — 보존 정책 명시)
 
 **DoD**
 - [x] `payout-points` Edge Function 작성 — `fn_get_pending_payouts` 호출 + 토스 API 호출 + 결과 RPC 갱신
 - [x] 일일 합산 한도 강제 — `fn_check_daily_payout_limit` + `point_status='blocked'` enum 추가
-- [x] 신규 가입자 24h 지연 — `fn_get_pending_payouts`가 자동 필터
+- [x] 신규 가입자 지급 게이트 — `admin_settings.payout_new_user_gate_hours` 외부화 (default 0, 즉시 지급)
 - [x] 카테고리 분류 헬퍼 (`fn_points_category` — `normal_*`/`streak_*` → 1, `today_selection`/`100_participants` → 2)
 - [ ] **운영자 적용 작업**:
   - `supabase functions deploy payout-points`
