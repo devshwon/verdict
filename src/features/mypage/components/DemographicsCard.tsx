@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SectionTitle } from "../../../components/SectionTitle";
+import { signOut } from "../../../config/auth";
 import {
   borderWidth,
   fontSize,
@@ -36,6 +37,28 @@ const AGE_LABEL: Record<MyPageDemographics["ageBucket"], string> = {
 export function DemographicsCard({ demographics, onUpdated, onError }: Props) {
   const [genderUpdating, setGenderUpdating] = useState(false);
   const [ageUpdating, setAgeUpdating] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  // effective='undisclosed' 면 raw 가 비어있거나 비공개 — 토스 OAuth 재진입으로 동의 받을 수 있음.
+  const needsReconsent =
+    demographics.gender === "undisclosed" ||
+    demographics.ageBucket === "undisclosed";
+
+  const handleReconsent = async () => {
+    if (resetting) return;
+    const confirmed = window.confirm(
+      "토스 로그인을 다시 진행해서 성별/연령대 정보 동의를 받습니다.\n\n현재 데이터는 유지되고 토스 동의 화면이 표시돼요. 진행할까요?",
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    try {
+      await signOut();
+      window.location.reload();
+    } catch (e) {
+      setResetting(false);
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const handleToggleGender = async () => {
     if (genderUpdating) return;
@@ -123,6 +146,30 @@ export function DemographicsCard({ demographics, onUpdated, onError }: Props) {
         >
           값은 토스 인증 정보를 따라요. 비공개로 두면 투표 결과 집계에서 본인의 응답이 별도 카운트로 분류돼요.
         </p>
+
+        {needsReconsent ? (
+          <button
+            type="button"
+            onClick={() => void handleReconsent()}
+            disabled={resetting}
+            style={{
+              marginTop: spacing.sm,
+              padding: `${spacing.sm}px ${spacing.md}px`,
+              borderRadius: radius.md,
+              border: `${borderWidth.hairline}px solid ${palette.brand}`,
+              background: resetting ? palette.divider : palette.brandSurface,
+              color: resetting ? palette.textTertiary : palette.brandText,
+              fontSize: fontSize.label,
+              fontWeight: fontWeight.medium,
+              cursor: resetting ? "default" : "pointer",
+              alignSelf: "flex-start",
+            }}
+          >
+            {resetting
+              ? "토스 로그인 화면으로 이동 중…"
+              : "토스 인증 정보 다시 받기"}
+          </button>
+        ) : null}
       </div>
     </section>
   );

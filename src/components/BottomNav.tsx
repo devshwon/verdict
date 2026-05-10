@@ -79,7 +79,9 @@ export function BottomNav() {
         zIndex: 50,
         margin: 0,
         // wrapper 자체는 클릭 통과(콘텐츠 보호) — inner 만 pointer-events 활성화
-        padding: `${spacing.md}px ${spacing.lg}px calc(${spacing.md}px + env(safe-area-inset-bottom))`,
+        // var(--safe-area-inset-bottom-px) 는 useSafeAreaVars 가 SDK 값으로 주입.
+        // env() 는 Android WebView 에서 부정확하므로 SDK 기반 변수 우선 사용.
+        padding: `${spacing.md}px ${spacing.lg}px calc(${spacing.md}px + var(--safe-area-inset-bottom-px, 0px))`,
         boxSizing: "border-box",
         display: "flex",
         justifyContent: "center",

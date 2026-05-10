@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import { palette } from "../design/tokens";
+import { useSafeAreaVars } from "../hooks/useSafeAreaVars";
 import { BottomNav } from "./BottomNav";
 
 type Props = {
@@ -16,6 +17,10 @@ export function AppShell({
   hideBottomNav = false,
   mainRef,
 }: Props) {
+  // 토스 인앱 SDK 의 정확한 safe-area 값 → --safe-area-inset-bottom-px CSS 변수
+  // (env(safe-area-inset-bottom) 이 Android 에서 부정확한 이슈 회피)
+  useSafeAreaVars();
+
   return (
     <div
       style={{
@@ -38,7 +43,7 @@ export function AppShell({
           // 모든 페이지에서 마지막 콘텐츠가 캡슐에 가려지지 않도록 보장.
           paddingBottom: hideBottomNav
             ? 0
-            : "calc(80px + env(safe-area-inset-bottom))",
+            : "calc(80px + var(--safe-area-inset-bottom-px, 0px))",
         }}
       >
         {children}
