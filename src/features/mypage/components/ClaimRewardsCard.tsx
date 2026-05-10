@@ -11,12 +11,14 @@ import {
 import {
   claimAllUnclaimedPoints,
   claimPoints,
+  payoutSelfPending,
   type UnclaimedPoint,
 } from "../../../lib/db/votes";
 
 type Props = {
   rewards: UnclaimedPoint[];
-  onClaimed: (count: number, totalAmount: number) => void;
+  // immediate=true 면 즉시 토스 지급 완료, false 면 신청만 됐고 5분 안에 자동 지급 예정
+  onClaimed: (count: number, totalAmount: number, immediate: boolean) => void;
   onError: (message: string) => void;
 };
 
@@ -53,7 +55,13 @@ export function ClaimRewardsCard({ rewards, onClaimed, onError }: Props) {
     setBusyId(id);
     try {
       const count = await claimPoints([id]);
-      onClaimed(count, count > 0 ? amount : 0);
+      if (count > 0) {
+        // claim 직후 자기 user 의 pending 즉시 토스 지급 시도 (실패 시 cron 5분 fallback)
+        const payout = await payoutSelfPending();
+        onClaimed(count, amount, payout.immediate && payout.succeeded > 0);
+      } else {
+        onClaimed(count, 0, false);
+      }
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -66,7 +74,12 @@ export function ClaimRewardsCard({ rewards, onClaimed, onError }: Props) {
     setClaimingAll(true);
     try {
       const { claimedCount, totalAmount: amt } = await claimAllUnclaimedPoints();
-      onClaimed(claimedCount, amt);
+      if (claimedCount > 0) {
+        const payout = await payoutSelfPending();
+        onClaimed(claimedCount, amt, payout.immediate && payout.succeeded > 0);
+      } else {
+        onClaimed(claimedCount, amt, false);
+      }
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {

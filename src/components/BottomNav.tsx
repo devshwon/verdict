@@ -5,20 +5,35 @@ import {
   fontSize,
   fontWeight,
   palette,
-  radius,
   shadow,
   spacing,
+  touchTarget,
 } from "../design/tokens";
 
 const NAV_ITEMS: {
   to: string;
   label: string;
+  icon: string;
   match: (p: string) => boolean;
 }[] = [
-  { to: "/", label: "홈", match: (p) => p === "/" },
-  { to: "/register", label: "등록", match: (p) => p.startsWith("/register") },
-  { to: "/mypage", label: "마이", match: (p) => p.startsWith("/mypage") },
+  { to: "/", label: "홈", icon: "🏠", match: (p) => p === "/" },
+  {
+    to: "/register",
+    label: "등록",
+    icon: "✏️",
+    match: (p) => p.startsWith("/register"),
+  },
+  {
+    to: "/mypage",
+    label: "마이",
+    icon: "👤",
+    match: (p) => p.startsWith("/mypage"),
+  },
 ];
+
+const NAV_HEIGHT = 56;
+const NAV_RADIUS = 24;
+const ICON_SIZE = 18;
 
 /**
  * 모바일 가상 키보드가 올라온 상태인지 감지.
@@ -55,43 +70,72 @@ export function BottomNav() {
 
   return (
     <nav
+      aria-label="하단 메뉴"
       style={{
         position: "fixed",
-        // safe-area-inset-bottom 만큼 더 띄워서 home indicator 와 겹치지 않게
-        bottom: `calc(${spacing.lg}px + env(safe-area-inset-bottom))`,
-        left: "50%",
-        transform: "translateX(-50%)",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        margin: 0,
+        // wrapper 자체는 클릭 통과(콘텐츠 보호) — inner 만 pointer-events 활성화
+        padding: `${spacing.md}px ${spacing.lg}px calc(${spacing.md}px + env(safe-area-inset-bottom))`,
+        boxSizing: "border-box",
         display: "flex",
-        gap: spacing.xs,
-        padding: spacing.xs,
-        background: palette.background,
-        borderRadius: radius.pill,
-        border: `${borderWidth.hairline}px solid ${palette.border}`,
-        boxShadow: shadow.md,
-        zIndex: 10,
+        justifyContent: "center",
+        alignItems: "flex-end",
+        pointerEvents: "none",
       }}
     >
-      {NAV_ITEMS.map(({ to, label, match }) => {
-        const isActive = match(pathname);
-        return (
-          <Link
-            key={to}
-            to={to}
-            aria-current={isActive ? "page" : undefined}
-            style={{
-              padding: `${spacing.sm}px ${spacing.lg}px`,
-              borderRadius: radius.pill,
-              background: isActive ? palette.brandSurface : "transparent",
-              color: isActive ? palette.brandText : palette.textSecondary,
-              fontSize: fontSize.label,
-              fontWeight: fontWeight.bold,
-              textDecoration: "none",
-            }}
-          >
-            {label}
-          </Link>
-        );
-      })}
+      <div
+        style={{
+          pointerEvents: "auto",
+          width: "100%",
+          maxWidth: 360,
+          minHeight: NAV_HEIGHT,
+          display: "flex",
+          alignItems: "stretch",
+          boxSizing: "border-box",
+          background: palette.background,
+          border: `${borderWidth.hairline}px solid ${palette.border}`,
+          borderRadius: NAV_RADIUS,
+          boxShadow: shadow.md,
+        }}
+      >
+        {NAV_ITEMS.map(({ to, label, icon, match }) => {
+          const isActive = match(pathname);
+          return (
+            <Link
+              key={to}
+              to={to}
+              aria-current={isActive ? "page" : undefined}
+              style={{
+                position: "relative",
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                minWidth: 0,
+                minHeight: touchTarget.md,
+                padding: `${spacing.xs}px ${spacing.xs}px`,
+                boxSizing: "border-box",
+                fontSize: fontSize.small,
+                fontWeight: isActive ? fontWeight.bold : fontWeight.medium,
+                color: isActive ? palette.brandText : palette.textSecondary,
+                textDecoration: "none",
+                transition: "color 0.2s",
+              }}
+            >
+              <span aria-hidden style={{ fontSize: ICON_SIZE, lineHeight: 1 }}>
+                {icon}
+              </span>
+              <span style={{ whiteSpace: "nowrap" }}>{label}</span>
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

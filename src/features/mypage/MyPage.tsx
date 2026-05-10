@@ -23,7 +23,6 @@ import { MyVotesSection } from "./components/MyVotesSection";
 import { ParticipatedSection } from "./components/ParticipatedSection";
 import { ProfileHeader } from "./components/ProfileHeader";
 import { StatGrid } from "./components/StatGrid";
-import { TestAccountInfo } from "./components/TestAccountInfo";
 
 type Status = "loading" | "ready" | "error";
 
@@ -86,13 +85,16 @@ export function MyPage() {
       ) : (
         <>
           <ProfileHeader profile={data.profile} />
-          <TestAccountInfo />
           <StatGrid stats={data.stats} />
           <ClaimRewardsCard
             rewards={unclaimed}
-            onClaimed={(count, totalAmount) => {
+            onClaimed={(count, totalAmount, immediate) => {
               if (count > 0) {
-                setToast(`${totalAmount}P 받기 신청 완료!`);
+                setToast(
+                  immediate
+                    ? `${totalAmount}P 지급 완료!`
+                    : `${totalAmount}P 받기 신청 완료. 잠시 후 자동 지급돼요`,
+                );
                 void load();
               }
             }}

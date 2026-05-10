@@ -19,7 +19,6 @@ import {
 } from "../../lib/db/votes";
 import { AdBanner } from "./components/AdBanner";
 import { CategoryTabs } from "./components/CategoryTabs";
-import { ClaimRewardsBanner } from "./components/ClaimRewardsBanner";
 import { FeedCard } from "./components/FeedCard";
 import { MissionWidget } from "./components/MissionWidget";
 import { PastTodayCarousel } from "./components/PastTodayCarousel";
@@ -229,12 +228,7 @@ export function HomeFeed() {
         }
       />
 
-      <ClaimRewardsBanner
-        rewards={unclaimed}
-        onClaimed={() => void refreshUnclaimed()}
-      />
-
-      <MissionWidget missions={missions} />
+      <MissionWidget missions={missions} unclaimedCount={unclaimed.length} />
 
       <CategoryTabs active={active} onChange={setActive} />
 

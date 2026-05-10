@@ -1,8 +1,14 @@
 // 토스포인트 지급 워커 (앱인토스 비즈월렛 promotion API 연동)
 //
+// 두 가지 호출 모드:
+//   A. cron 모드 (service_role JWT) — 5분마다 전체 pending 처리
+//   B. user-scoped 모드 (일반 user JWT) — "받기" 클릭 즉시 자기 user 의 pending 만 처리
+//      → user JWT 의 sub(user_id) 추출 후 fn_get_pending_payouts_for_user 호출
+//
 // 흐름:
-//   1) pg_cron이 5분마다 이 함수 호출 (Authorization: Bearer SERVICE_ROLE_KEY)
-//   2) fn_get_pending_payouts RPC로 처리 대상 + toss_user_key + promotion_id 조회
+//   1) cron 또는 클라이언트가 호출
+//   2) 인증 분기 → 모드 결정
+//   3) fn_get_pending_payouts (또는 _for_user) RPC로 처리 대상 + 매핑 조회
 //   3) 매핑 누락 시 → fn_fail_payout (운영자 알림 대상)
 //   4) 매핑 OK → 토스 promotion API 호출 (mTLS, 2-step)
 //      - Step A: POST /api-partner/v1/apps-in-toss/promotion/execute-promotion/get-key
@@ -39,6 +45,22 @@ const ENV_DRY_RUN = Deno.env.get('TOSS_PAYOUT_DRY_RUN') === '1'
 
 const TOSS_API_BASE = 'https://apps-in-toss-api.toss.im'
 const BATCH_SIZE = 100
+
+// CORS — 즉시 지급 모드 (브라우저/WebView 의 user-scoped 호출) 위해 필수.
+// cron 호출은 server-side fetch 라 무관, 다만 일관성 위해 모든 응답에 적용.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Max-Age': '86400',
+}
+
+function withCors(res: Response): Response {
+  const headers = new Headers(res.headers)
+  for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v)
+  return new Response(res.body, { status: res.status, headers })
+}
 
 interface PendingRow {
   id: string
@@ -203,14 +225,74 @@ async function payoutOne(row: PendingRow, dryRun: boolean): Promise<PayoutResult
   }
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const pad = (4 - (payloadB64.length % 4)) % 4
+    return JSON.parse(atob(payloadB64 + '='.repeat(pad)))
+  } catch {
+    return null
+  }
+}
+
+// service_role 인증 검사
+//   1차: env var 와 정확 일치 (legacy 동작 보존)
+//   2차: JWT payload 의 role=service_role (legacy/new key 시스템 모두 호환)
+//   verify_jwt=true 가 활성이라 Supabase 가 1차 서명 검증 → 도달한 JWT 는 valid
+function isServiceRoleAuth(authHeader: string): boolean {
+  const m = /^Bearer (.+)$/.exec(authHeader)
+  if (!m) return false
+  const token = m[1]
+  if (token === SUPABASE_SERVICE_ROLE_KEY) return true
+  const payload = decodeJwtPayload(token)
+  return payload?.role === 'service_role'
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// 일반 user JWT 에서 user_id(sub) 추출.
+// 인증 검증 우선순위:
+//   1) role='authenticated' (legacy supabase auth JWT)
+//   2) role 필드 없어도 sub 가 UUID 형식이면 인증된 사용자로 간주
+//      (Supabase 새 publishable/secret keys 시스템 호환)
+// anon key 는 sub 없거나 비-UUID 라 자동 reject.
+function extractAuthenticatedUserId(authHeader: string): string | null {
+  const m = /^Bearer (.+)$/.exec(authHeader)
+  if (!m) return null
+  const payload = decodeJwtPayload(m[1])
+  if (!payload) return null
+  const sub = payload.sub
+  if (typeof sub !== 'string') return null
+  if (payload.role === 'authenticated') return sub
+  // role 없음 — sub 가 UUID 면 user 로 신뢰
+  if (UUID_RE.test(sub)) return sub
+  return null
+}
+
 Deno.serve(async (req) => {
+  // CORS preflight — 토스 인앱 WebView 가 cross-origin POST 전 OPTIONS 보냄
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
   const authHeader = req.headers.get('authorization') ?? ''
-  const expected = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-  if (authHeader !== expected) {
-    return Response.json(
-      { ok: false, error: 'service_role required' },
-      { status: 401 },
-    )
+
+  // 인증 분기 — service_role(cron 전체) 또는 일반 user JWT(자기 row 만)
+  const isServiceRole = isServiceRoleAuth(authHeader)
+  let scopedUserId: string | null = null
+  if (!isServiceRole) {
+    scopedUserId = extractAuthenticatedUserId(authHeader)
+    if (!scopedUserId) {
+      return withCors(
+        Response.json(
+          { ok: false, error: 'auth required (service_role or authenticated user)' },
+          { status: 401 },
+        ),
+      )
+    }
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -235,15 +317,20 @@ Deno.serve(async (req) => {
   const DRY_RUN = ENV_DRY_RUN || dbDryRun || !mtlsConfigured
 
   try {
-    const { data: pending, error: fetchErr } = await admin.rpc(
-      'fn_get_pending_payouts',
-      { p_batch_size: BATCH_SIZE },
-    )
+    // 호출 모드 분기:
+    //   - cron(service_role): 전체 user 의 pending 처리
+    //   - user-scoped(일반 user JWT): 자기 user 의 pending 만 처리
+    const { data: pending, error: fetchErr } = scopedUserId
+      ? await admin.rpc('fn_get_pending_payouts_for_user', {
+          p_user_id: scopedUserId,
+          p_batch_size: BATCH_SIZE,
+        })
+      : await admin.rpc('fn_get_pending_payouts', { p_batch_size: BATCH_SIZE })
     if (fetchErr) throw fetchErr
 
     const rows = (pending ?? []) as PendingRow[]
     if (rows.length === 0) {
-      return Response.json({
+      return withCors(Response.json({
         ok: true,
         processed: 0,
         succeeded: 0,
@@ -251,7 +338,8 @@ Deno.serve(async (req) => {
         unmapped: 0,
         dry_run: DRY_RUN,
         mtls_configured: mtlsConfigured,
-      })
+        mode: scopedUserId ? 'user' : 'cron',
+      }))
     }
 
     let succeeded = 0
@@ -300,7 +388,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return Response.json({
+    return withCors(Response.json({
       ok: true,
       processed: rows.length,
       succeeded,
@@ -308,11 +396,12 @@ Deno.serve(async (req) => {
       unmapped,
       dry_run: DRY_RUN,
       mtls_configured: mtlsConfigured,
+      mode: scopedUserId ? 'user' : 'cron',
       errors: errors.slice(0, 10),
-    })
+    }))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[payout-points] error:', msg)
-    return Response.json({ ok: false, error: msg }, { status: 500 })
+    return withCors(Response.json({ ok: false, error: msg }, { status: 500 }))
   }
 })

@@ -11,11 +11,14 @@ import type { DailyMissions } from "../../../lib/db/votes";
 
 type Props = {
   missions: DailyMissions | null;
+  // 받을 보상 건수 — 0 보다 크면 우측 CTA 가 "받으러 가기 ›" 로 강조
+  unclaimedCount?: number;
 };
 
-export function MissionWidget({ missions }: Props) {
+export function MissionWidget({ missions, unclaimedCount = 0 }: Props) {
   const navigate = useNavigate();
   if (!missions) return null;
+  const hasUnclaimed = unclaimedCount > 0;
 
   const completed =
     (missions.attendance.attendedToday ? 1 : 0) +
@@ -86,16 +89,29 @@ export function MissionWidget({ missions }: Props) {
           무료이용권 {missions.freePassBalance}개
         </span>
       </div>
-      <span
-        aria-hidden
-        style={{
-          fontSize: fontSize.label,
-          color: palette.textTertiary,
-          fontWeight: fontWeight.medium,
-        }}
-      >
-        ›
-      </span>
+      {hasUnclaimed ? (
+        <span
+          style={{
+            fontSize: fontSize.label,
+            color: palette.brandText,
+            fontWeight: fontWeight.bold,
+            whiteSpace: "nowrap",
+          }}
+        >
+          받으러 가기 ›
+        </span>
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            fontSize: fontSize.label,
+            color: palette.textTertiary,
+            fontWeight: fontWeight.medium,
+          }}
+        >
+          ›
+        </span>
+      )}
     </button>
   );
 }

@@ -152,7 +152,7 @@
 ```
 유저가 후보 신청
     ↓
-LLM 1차 검열 (혐오/중복/품질, §10 — OpenAI gpt-4o-mini)
+LLM 1차 검열 (혐오/중복/품질, §10 — OpenAI gpt-5.4-nano)
     ↓
 점수 산정 (아래 가중치 합산)
     ↓
@@ -247,7 +247,7 @@ LLM 1차 검열 (혐오/중복/품질, §10 — OpenAI gpt-4o-mini)
   - **총 일일 천장: 150P** (정상 사용자 99%는 ~12P 수준)
   - **월 합산 한도: 행동 트랙 400P / 월** (장기 사용자 보호 + 어뷰저 컷)
 - **디바이스 1:1 매핑**: 같은 디바이스에서 다계정 보상 수확 차단 (토스 콘솔 디바이스 핑거프린트 활용 가능 여부 확인 필요).
-- **신규 가입자 보상 24h 지연**: 가입 후 24시간 동안은 보상 적립만, 지급은 보류.
+- **신규 가입자 지급 게이트** (외부화): `admin_settings.payout_new_user_gate_hours` (default `0` — 즉시 지급). 토스 본인인증 기반 어뷰즈 방어를 1차로 신뢰하므로 default 0. 운영 중 다중 가입 어뷰즈 패턴 발견 시 admin SPA 의 SettingsPage 에서 1~72 사이로 즉시 조정 가능 (`fn_get_pending_payouts` / `fn_get_pending_payouts_for_user` 가 동적 lookup).
 - **투표 응답 유효성**: 단순 클릭 패턴(전부 A 선택 등) 탐지 시 보상 차감 또는 보류.
 - **로그**: 사용자별 지급 사유 / 시각 / 금액 / 트리거 ID 전수 기록 (분쟁·정산 대응).
 
@@ -303,7 +303,7 @@ LLM 1차 검열 (혐오/중복/품질, §10 — OpenAI gpt-4o-mini)
 ## 10. 기술 스택 참고사항
 
 - 플랫폼: 앱인토스 (Toss mini-app)
-- AI 검열: OpenAI Chat Completions (`gpt-4o-mini`, JSON 모드 강제) — 1건당 약 ₩0.24 (sample 10개 기준)
+- AI 검열: OpenAI Chat Completions (`gpt-5.4-nano`, JSON 모드 강제) — 1건당 단가는 모델 가격 기준 재산정 필요 (sample 10개 기준)
 - 인증: **토스 실명 인증(IdP) ↔ Supabase Auth(세션 관리자) 브릿지** — 1인 1계정 보장
 - DB / 백엔드: Supabase (Postgres + Edge Functions + RLS)
 - 광고: 앱인토스 비즈월렛 리워드 광고 연동

@@ -186,7 +186,7 @@ function buildOptionsWithRatio(
     const count = r?.total_count ?? 0;
     const ratio =
       totalParticipants > 0 ? Math.round((count / totalParticipants) * 100) : 0;
-    return { id: opt.id, label: opt.option_text, ratio };
+    return { id: opt.id, label: opt.option_text, ratio, count };
   });
 }
 
@@ -211,7 +211,8 @@ export async function fetchFeedVotes(
     .eq("type", "normal")
     .in("status", ["active", "closed"])
     .gte("closed_at", cutoff)
-    .order("closed_at", { ascending: false })
+    // 등록 순(최신이 위) 정렬. closed_at 가 아닌 created_at 기준.
+    .order("created_at", { ascending: false })
     .limit(FEED_LIMIT);
 
   if (category !== "all") {
@@ -927,6 +928,36 @@ export async function claimPoints(logIds: string[]): Promise<number> {
   });
   if (error) throw error;
   return typeof data === "number" ? data : 0;
+}
+
+export type PayoutSelfResult = {
+  // 즉시 토스 호출 성공 여부 (false 면 5분 cron fallback 으로 넘어감)
+  immediate: boolean;
+  succeeded: number;
+  failed: number;
+};
+
+/**
+ * 본인 user 의 pending row 만 즉시 토스 지급 처리.
+ * claim_points 직후 호출해 "받기" → 토스 지급까지 한 번에 끝낸다.
+ * 네트워크/일시 오류 시 immediate=false 반환 (이미 pending 이므로 cron 이 5분 안에 처리).
+ */
+export async function payoutSelfPending(): Promise<PayoutSelfResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("payout-points", {
+      body: {},
+    });
+    if (error || !data?.ok) {
+      return { immediate: false, succeeded: 0, failed: 0 };
+    }
+    return {
+      immediate: true,
+      succeeded: typeof data.succeeded === "number" ? data.succeeded : 0,
+      failed: typeof data.failed === "number" ? data.failed : 0,
+    };
+  } catch {
+    return { immediate: false, succeeded: 0, failed: 0 };
+  }
 }
 
 // ============================================================================

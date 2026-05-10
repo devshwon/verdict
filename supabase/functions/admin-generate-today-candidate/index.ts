@@ -4,7 +4,7 @@
 //   1) Authorization 헤더의 user JWT로 users.is_admin 확인
 //   2) admin_prompts에서 today_vote_gen_system / today_vote_gen_user 조회
 //   3) {category} placeholder 치환
-//   4) OpenAI Chat Completions (gpt-4o-mini, JSON 모드) — 1건만 생성
+//   4) OpenAI Chat Completions (gpt-5.4-nano, JSON 모드) — 1건만 생성
 //   5) 검증 (실패 시 1회 재시도) 후 미리보기 반환 — DB 저장은 SPA가 RPC admin_create_today_vote로 따로 호출
 //
 // 대상 카테고리: TODAY_CARD_CATEGORIES = daily/relationship/work/game (etc 제외)
@@ -15,7 +15,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
-const OPENAI_MODEL = 'gpt-4o-mini'
+const OPENAI_MODEL = 'gpt-5.4-nano'
 const TODAY_CATEGORIES = ['daily', 'relationship', 'work', 'game'] as const
 type TodayCategory = typeof TODAY_CATEGORIES[number]
 
@@ -90,7 +90,7 @@ async function callOpenAI(
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      max_tokens: 256,
+      max_completion_tokens: 256,
       temperature: 0.9,
       response_format: { type: 'json_object' },
       messages: [

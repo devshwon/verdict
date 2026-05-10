@@ -4,7 +4,7 @@
 //   1) Authorization 헤더의 user JWT로 Supabase 클라이언트 생성 → users.is_admin 확인
 //   2) admin_prompts에서 normal_vote_gen_system / normal_vote_gen_user 조회 (service_role)
 //   3) {category} {count} {exclude} placeholder 치환
-//   4) OpenAI Chat Completions (gpt-4o-mini, JSON 모드) 호출
+//   4) OpenAI Chat Completions (gpt-5.4-nano, JSON 모드) 호출
 //   5) 응답 JSON 스키마 검증 (실패 시 1회 재시도)
 //   6) 검증 통과 항목만 미리보기로 반환 — DB 저장은 SPA가 RPC admin_create_normal_vote로 따로 호출
 //
@@ -12,7 +12,7 @@
 //   - OPENAI_API_KEY (Supabase secret)
 //   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (자동 주입)
 //
-// 비용 (1회): 입력 ~600 토큰, 출력 ~250 토큰 → gpt-4o-mini ₩0.18 / 회
+// 비용 (1회): 입력 ~600 토큰, 출력 ~250 토큰 → 모델 단가에 따라 산정 (gpt-5.4-nano 단가로 재산정 필요)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -20,7 +20,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
-const OPENAI_MODEL = 'gpt-4o-mini'
+const OPENAI_MODEL = 'gpt-5.4-nano'
 const ALLOWED_CATEGORIES = ['daily', 'relationship', 'work', 'game', 'etc'] as const
 type Category = typeof ALLOWED_CATEGORIES[number]
 
@@ -112,7 +112,7 @@ async function callOpenAI(
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      max_tokens: 800,
+      max_completion_tokens: 800,
       temperature: 0.9,
       response_format: { type: 'json_object' },
       messages: [

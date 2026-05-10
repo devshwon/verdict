@@ -17,7 +17,7 @@ import {
   radius,
   spacing,
 } from "../../../design/tokens";
-import { castVote } from "../../../lib/db/votes";
+import { castVote, payoutSelfPending } from "../../../lib/db/votes";
 import { recordMyCast } from "../../../lib/voteCache";
 import type { FeedVote, VoteOption } from "../types";
 
@@ -38,6 +38,17 @@ export function FeedCard({ vote, onCastSuccess }: Props) {
   const [voted, setVoted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // 인라인 투표 직후 결과 즉시 반영용. props 의 vote.options 는 피드 로드 시점 server 값이라
+  // 자기 투표 1건이 안 들어가 있음 → 자기 표를 클라이언트에서 +1 한 옵션을 결과 바에 사용.
+  const [postCastOptions, setPostCastOptions] = useState<VoteOption[] | null>(
+    null,
+  );
+  const [postCastParticipants, setPostCastParticipants] = useState<number | null>(
+    null,
+  );
+
+  const displayOptions = postCastOptions ?? vote.options;
+  const displayParticipants = postCastParticipants ?? vote.participants;
 
   const goDetail = () => {
     if (navigatingRef.current) return;
@@ -68,9 +79,26 @@ export function FeedCard({ vote, onCastSuccess }: Props) {
     const result = await castVote(vote.id, pendingId);
     if (result.ok) {
       recordMyCast(vote.id, pendingId);
+
+      // 자기 표 1건 즉시 반영 — server 트리거가 participants_count +1 시키지만
+      // 피드 props 는 로드 시점 stale 값이라 결과 바가 0% 로 보일 수 있음.
+      const selectedId = pendingId;
+      const newTotal = vote.participants + 1;
+      const updatedOptions: VoteOption[] = vote.options.map((opt) => {
+        const newCount = opt.id === selectedId ? opt.count + 1 : opt.count;
+        const newRatio =
+          newTotal > 0 ? Math.round((newCount / newTotal) * 100) : 0;
+        return { ...opt, count: newCount, ratio: newRatio };
+      });
+      setPostCastOptions(updatedOptions);
+      setPostCastParticipants(newTotal);
+
       setVoted(true);
       setPendingId(null);
       onCastSuccess?.();
+
+      // 투표 참여 1P + (첫 투표 시 출석 1P) 즉시 지급 시도. 실패해도 cron 5분 fallback.
+      void payoutSelfPending();
     } else {
       setToast(result.message);
       setPendingId(null);
@@ -117,7 +145,7 @@ export function FeedCard({ vote, onCastSuccess }: Props) {
           }}
         >
           {vote.tag === "closed" || vote.tag === "popular"
-            ? `${vote.participants.toLocaleString()}명 참여`
+            ? `${displayParticipants.toLocaleString()}명 참여`
             : vote.remainingLabel}
         </span>
       </div>
@@ -148,7 +176,7 @@ export function FeedCard({ vote, onCastSuccess }: Props) {
               참여 완료
             </span>
           ) : null}
-          {vote.options.map((opt) => (
+          {displayOptions.map((opt) => (
             <ResultBar
               key={opt.id}
               option={opt}
