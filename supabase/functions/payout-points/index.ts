@@ -400,7 +400,13 @@ Deno.serve(async (req) => {
       errors: errors.slice(0, 10),
     }))
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    // Supabase PostgrestError 는 Error 인스턴스가 아닌 plain object — String(e)='[object Object]' 회피
+    const msg =
+      e instanceof Error
+        ? e.message
+        : typeof e === 'object' && e !== null
+          ? JSON.stringify(e)
+          : String(e)
     console.error('[payout-points] error:', msg)
     return withCors(Response.json({ ok: false, error: msg }, { status: 500 }))
   }
